@@ -1,33 +1,11 @@
 import { createFileRoute } from '@tanstack/react-router'
+import { useProjects } from '@/hooks'
 
 export const Route = createFileRoute('/projects')({
   component: Projects,
 })
 
 type ProjectStatus = 'planning' | 'active' | 'on_hold' | 'completed' | 'archived'
-
-interface Project {
-  id: string
-  name: string
-  code: string
-  client: string
-  status: ProjectStatus
-  budgetHours: number
-  loggedHours: number
-  startDate: string
-  endDate: string
-}
-
-const mockProjects: Project[] = [
-  { id: '1', name: 'Q4 Financial Audit', code: 'ACM-Q4FA', client: 'Acme Corp', status: 'active', budgetHours: 320, loggedHours: 187, startDate: 'Oct 1, 2025', endDate: 'Dec 31, 2025' },
-  { id: '2', name: 'Cloud Migration', code: 'TVI-CM25', client: 'TechVault Inc', status: 'active', budgetHours: 480, loggedHours: 312, startDate: 'Sep 15, 2025', endDate: 'Mar 15, 2026' },
-  { id: '3', name: 'Security Compliance Audit', code: 'DGL-SCA', client: 'DataGuard LLC', status: 'active', budgetHours: 200, loggedHours: 156, startDate: 'Nov 1, 2025', endDate: 'Jan 31, 2026' },
-  { id: '4', name: 'ERP Integration', code: 'GS-ERPI', client: 'GlobalServ', status: 'completed', budgetHours: 600, loggedHours: 578, startDate: 'Jun 1, 2025', endDate: 'Oct 30, 2025' },
-  { id: '5', name: 'Mobile App Redesign', code: 'PXL-MAR', client: 'PixelWorks', status: 'planning', budgetHours: 240, loggedHours: 0, startDate: 'Jan 15, 2026', endDate: 'Apr 30, 2026' },
-  { id: '6', name: 'Data Pipeline Overhaul', code: 'NF-DPO', client: 'NextFlow', status: 'on_hold', budgetHours: 350, loggedHours: 89, startDate: 'Aug 1, 2025', endDate: 'Feb 28, 2026' },
-  { id: '7', name: 'Annual Compliance Review', code: 'ACM-ACR', client: 'Acme Corp', status: 'active', budgetHours: 160, loggedHours: 64, startDate: 'Dec 1, 2025', endDate: 'Feb 28, 2026' },
-  { id: '8', name: 'Network Infrastructure', code: 'TVI-NI', client: 'TechVault Inc', status: 'completed', budgetHours: 280, loggedHours: 265, startDate: 'Jul 1, 2025', endDate: 'Nov 15, 2025' },
-]
 
 const projectStatusConfig: Record<ProjectStatus, { bg: string; text: string; label: string }> = {
   planning: { bg: 'bg-blue-50', text: 'text-blue-700', label: 'Planning' },
@@ -37,8 +15,8 @@ const projectStatusConfig: Record<ProjectStatus, { bg: string; text: string; lab
   archived: { bg: 'bg-slate-100', text: 'text-slate-600', label: 'Archived' },
 }
 
-function ProjectStatusBadge({ status }: { status: ProjectStatus }) {
-  const config = projectStatusConfig[status]
+function ProjectStatusBadge({ status }: { status: string }) {
+  const config = projectStatusConfig[status as ProjectStatus] ?? projectStatusConfig.planning
   return (
     <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${config.bg} ${config.text}`}>
       {config.label}
@@ -59,7 +37,14 @@ function BudgetBar({ logged, budget }: { logged: number; budget: number }) {
   )
 }
 
+function formatDate(dateStr: string | null) {
+  if (!dateStr) return '—'
+  return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
 function Projects() {
+  const { data: projects = [], isLoading, error, refetch } = useProjects()
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -69,34 +54,79 @@ function Projects() {
         </button>
       </div>
 
-      <div className="rounded-lg border border-border bg-white overflow-hidden">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="bg-light-bg border-b border-border">
-              <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-muted">Project</th>
-              <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-muted">Client</th>
-              <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-muted">Code</th>
-              <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-muted">Status</th>
-              <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-muted">Budget</th>
-              <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-muted">Duration</th>
-            </tr>
-          </thead>
-          <tbody>
-            {mockProjects.map((project) => (
-              <tr key={project.id} className="border-b border-border last:border-0 hover:bg-highlight transition-colors duration-75 h-9 cursor-pointer">
-                <td className="px-3 py-1.5 font-medium text-dark-text">{project.name}</td>
-                <td className="px-3 py-1.5 text-muted">{project.client}</td>
-                <td className="px-3 py-1.5 font-mono text-xs text-muted">{project.code}</td>
-                <td className="px-3 py-1.5"><ProjectStatusBadge status={project.status} /></td>
-                <td className="px-3 py-1.5 min-w-[180px]">
-                  <BudgetBar logged={project.loggedHours} budget={project.budgetHours} />
-                </td>
-                <td className="px-3 py-1.5 text-muted whitespace-nowrap text-xs">{project.startDate} — {project.endDate}</td>
+      {isLoading ? (
+        <TableSkeleton rows={6} cols={6} />
+      ) : error ? (
+        <ErrorState message="Failed to load projects" onRetry={() => refetch()} />
+      ) : projects.length === 0 ? (
+        <EmptyState message="No projects yet. Create your first project to get started." />
+      ) : (
+        <div className="rounded-lg border border-border bg-white overflow-hidden">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-light-bg border-b border-border">
+                <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-muted">Project</th>
+                <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-muted">Client</th>
+                <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-muted">Code</th>
+                <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-muted">Status</th>
+                <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-muted">Budget</th>
+                <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-muted">Duration</th>
               </tr>
+            </thead>
+            <tbody>
+              {projects.map((project: any) => (
+                <tr key={project.id} className="border-b border-border last:border-0 hover:bg-highlight transition-colors duration-75 h-9 cursor-pointer">
+                  <td className="px-3 py-1.5 font-medium text-dark-text">{project.name}</td>
+                  <td className="px-3 py-1.5 text-muted">{project.client?.name ?? '—'}</td>
+                  <td className="px-3 py-1.5 font-mono text-xs text-muted">{project.code ?? '—'}</td>
+                  <td className="px-3 py-1.5"><ProjectStatusBadge status={project.status} /></td>
+                  <td className="px-3 py-1.5 min-w-[180px]">
+                    <BudgetBar logged={0} budget={project.budgetHours ?? 0} />
+                  </td>
+                  <td className="px-3 py-1.5 text-muted whitespace-nowrap text-xs">
+                    {formatDate(project.startDate)} — {formatDate(project.endDate)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function TableSkeleton({ rows, cols }: { rows: number; cols: number }) {
+  return (
+    <div className="rounded-lg border border-border bg-white overflow-hidden">
+      <div className="p-4 space-y-3">
+        {Array.from({ length: rows }).map((_, i) => (
+          <div key={i} className="flex gap-4">
+            {Array.from({ length: cols }).map((_, j) => (
+              <div key={j} className="h-4 rounded bg-muted-bg animate-pulse" style={{ width: `${100 / cols}%` }} />
             ))}
-          </tbody>
-        </table>
+          </div>
+        ))}
       </div>
+    </div>
+  )
+}
+
+function EmptyState({ message }: { message: string }) {
+  return (
+    <div className="rounded-lg border border-border bg-white p-12 text-center">
+      <p className="text-sm text-muted">{message}</p>
+    </div>
+  )
+}
+
+function ErrorState({ message, onRetry }: { message: string; onRetry: () => void }) {
+  return (
+    <div className="rounded-lg border border-border bg-white p-12 text-center">
+      <p className="text-sm text-red-600 mb-3">{message}</p>
+      <button onClick={onRetry} className="text-sm font-medium text-brand hover:text-brand-hover transition-colors duration-75">
+        Try again
+      </button>
     </div>
   )
 }

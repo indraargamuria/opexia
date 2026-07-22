@@ -1,10 +1,22 @@
 import { createFileRoute } from '@tanstack/react-router'
+import { useTimeEntries } from '@/hooks'
 
 export const Route = createFileRoute('/')({
   component: Dashboard,
 })
 
 function Dashboard() {
+  const { data: timeEntries = [], isLoading, error, refetch } = useTimeEntries()
+
+  const totalMinutes = timeEntries.reduce((sum: number, e: any) => sum + (e.durationMinutes ?? 0), 0)
+  const totalHours = Math.floor(totalMinutes / 60)
+  const remainingMins = totalMinutes % 60
+  const totalHoursStr = `${totalHours}h ${String(remainingMins).padStart(2, '0')}m`
+
+  const activeProjects = new Set(
+    timeEntries.filter((e: any) => e.project).map((e: any) => e.projectId)
+  ).size
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -16,19 +28,27 @@ function Dashboard() {
 
       <div className="grid grid-cols-12 gap-6">
         <div className="col-span-4">
-          <MetricCard label="Total Hours This Week" value="32h 15m" trend="+4.2h vs last week" />
+          <MetricCard label="Total Hours This Week" value={isLoading ? '—' : totalHoursStr} trend={timeEntries.length > 0 ? `${timeEntries.length} entries` : 'No entries yet'} />
         </div>
         <div className="col-span-4">
-          <MetricCard label="Utilization Rate" value="87%" trend="Target: 85%" />
+          <MetricCard label="Utilization Rate" value="—" trend="Target: 85%" />
         </div>
         <div className="col-span-4">
-          <MetricCard label="Active Projects" value="5" trend="2 pending review" />
+          <MetricCard label="Active Projects" value={isLoading ? '—' : String(activeProjects)} trend={activeProjects > 0 ? `${activeProjects} with time logged` : 'No active projects'} />
         </div>
       </div>
 
       <div>
         <h2 className="text-lg font-semibold text-dark-text mb-3">Recent Time Entries</h2>
-        <TimeEntriesTable />
+        {isLoading ? (
+          <TableSkeleton rows={5} cols={6} />
+        ) : error ? (
+          <ErrorState message="Failed to load time entries" onRetry={() => refetch()} />
+        ) : timeEntries.length === 0 ? (
+          <EmptyState message="No time entries yet. Start tracking to see your entries here." />
+        ) : (
+          <TimeEntriesTable entries={timeEntries} />
+        )}
       </div>
     </div>
   )
@@ -46,80 +66,6 @@ function MetricCard({ label, value, trend }: { label: string; value: string; tre
 
 type TimeEntryStatus = 'running' | 'pending' | 'approved' | 'rejected' | 'invoiced'
 
-interface TimeEntry {
-  id: string
-  project: string
-  client: string
-  description: string
-  duration: string
-  date: string
-  status: TimeEntryStatus
-  tags: string[]
-}
-
-const mockTimeEntries: TimeEntry[] = [
-  {
-    id: '1',
-    project: 'Q4 Financial Audit',
-    client: 'Acme Corp',
-    description: 'Review quarterly financial statements',
-    duration: '02:34:17',
-    date: 'Today',
-    status: 'running',
-    tags: ['billable'],
-  },
-  {
-    id: '2',
-    project: 'Cloud Migration',
-    client: 'TechVault Inc',
-    description: 'Infrastructure assessment and planning',
-    duration: '03:15:00',
-    date: 'Today',
-    status: 'pending',
-    tags: ['billable', 'deep-work'],
-  },
-  {
-    id: '3',
-    project: 'Security Compliance',
-    client: 'DataGuard LLC',
-    description: 'ISO 27001 gap analysis',
-    duration: '04:00:00',
-    date: 'Yesterday',
-    status: 'approved',
-    tags: ['billable'],
-  },
-  {
-    id: '4',
-    project: 'Q4 Financial Audit',
-    client: 'Acme Corp',
-    description: 'Stakeholder interview preparation',
-    duration: '01:45:00',
-    date: 'Yesterday',
-    status: 'approved',
-    tags: ['billable', 'meeting'],
-  },
-  {
-    id: '5',
-    project: 'Internal Operations',
-    client: 'Opexia',
-    description: 'Team standup and sprint planning',
-    duration: '01:00:00',
-    date: 'Jul 18',
-    status: 'rejected',
-    tags: ['non-billable', 'meeting'],
-  },
-  {
-    id: '6',
-    project: 'ERP Integration',
-    client: 'GlobalServ',
-    description: 'SAP connector API development',
-    duration: '05:30:00',
-    date: 'Jul 17',
-    status: 'invoiced',
-    tags: ['billable', 'deep-work'],
-  },
-]
-
 const statusConfig: Record<TimeEntryStatus, { bg: string; text: string; dot: string; label: string }> = {
   running: { bg: 'bg-brand-light', text: 'text-brand', dot: 'bg-brand animate-pulse-dot', label: 'Running' },
   pending: { bg: 'bg-amber-50', text: 'text-amber-700', dot: 'bg-amber-500', label: 'Pending' },
@@ -129,7 +75,7 @@ const statusConfig: Record<TimeEntryStatus, { bg: string; text: string; dot: str
 }
 
 function StatusBadge({ status }: { status: TimeEntryStatus }) {
-  const config = statusConfig[status]
+  const config = statusConfig[status] ?? statusConfig.pending
   return (
     <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ${config.bg} ${config.text}`}>
       <span className={`h-1.5 w-1.5 rounded-full ${config.dot}`} />
@@ -138,7 +84,25 @@ function StatusBadge({ status }: { status: TimeEntryStatus }) {
   )
 }
 
-function TimeEntriesTable() {
+function formatDate(dateStr: string) {
+  const d = new Date(dateStr)
+  const now = new Date()
+  const isToday = d.toDateString() === now.toDateString()
+  const yesterday = new Date(now)
+  yesterday.setDate(yesterday.getDate() - 1)
+  const isYesterday = d.toDateString() === yesterday.toDateString()
+  if (isToday) return 'Today'
+  if (isYesterday) return 'Yesterday'
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
+
+function formatDuration(minutes: number) {
+  const h = Math.floor(minutes / 60)
+  const m = minutes % 60
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00`
+}
+
+function TimeEntriesTable({ entries }: { entries: any[] }) {
   return (
     <div className="rounded-lg border border-border bg-white overflow-hidden">
       <table className="w-full text-sm">
@@ -153,29 +117,64 @@ function TimeEntriesTable() {
           </tr>
         </thead>
         <tbody>
-          {mockTimeEntries.map((entry) => (
+          {entries.map((entry: any) => (
             <tr key={entry.id} className="border-b border-border last:border-0 hover:bg-highlight transition-colors duration-75 h-9">
-              <td className="px-3 py-1.5 text-muted whitespace-nowrap">{entry.date}</td>
+              <td className="px-3 py-1.5 text-muted whitespace-nowrap">{formatDate(entry.startedAt)}</td>
               <td className="px-3 py-1.5">
-                <div className="text-dark-text font-medium">{entry.project}</div>
-                <div className="text-xs text-muted">{entry.client}</div>
+                <div className="text-dark-text font-medium">{entry.project?.name ?? '—'}</div>
+                <div className="text-xs text-muted">{entry.project?.client?.name ?? ''}</div>
               </td>
-              <td className="px-3 py-1.5 text-dark-text">{entry.description}</td>
+              <td className="px-3 py-1.5 text-dark-text">{entry.description ?? '—'}</td>
               <td className="px-3 py-1.5">
                 <div className="flex gap-1">
-                  {entry.tags.map((tag) => (
-                    <span key={tag} className="inline-flex items-center rounded-full bg-brand-light text-brand px-2 py-0.5 text-xs">
-                      {tag}
+                  {(entry.timeEntryTags ?? []).map((t: any) => (
+                    <span key={t.tag?.id ?? t.tagId} className="inline-flex items-center rounded-full bg-brand-light text-brand px-2 py-0.5 text-xs">
+                      {t.tag?.name}
                     </span>
                   ))}
                 </div>
               </td>
-              <td className="px-3 py-1.5 text-right font-mono text-sm text-dark-text whitespace-nowrap">{entry.duration}</td>
+              <td className="px-3 py-1.5 text-right font-mono text-sm text-dark-text whitespace-nowrap">{formatDuration(entry.durationMinutes ?? 0)}</td>
               <td className="px-3 py-1.5"><StatusBadge status={entry.status} /></td>
             </tr>
           ))}
         </tbody>
       </table>
+    </div>
+  )
+}
+
+function TableSkeleton({ rows, cols }: { rows: number; cols: number }) {
+  return (
+    <div className="rounded-lg border border-border bg-white overflow-hidden">
+      <div className="p-4 space-y-3">
+        {Array.from({ length: rows }).map((_, i) => (
+          <div key={i} className="flex gap-4">
+            {Array.from({ length: cols }).map((_, j) => (
+              <div key={j} className="h-4 rounded bg-muted-bg animate-pulse" style={{ width: `${100 / cols}%` }} />
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function EmptyState({ message }: { message: string }) {
+  return (
+    <div className="rounded-lg border border-border bg-white p-12 text-center">
+      <p className="text-sm text-muted">{message}</p>
+    </div>
+  )
+}
+
+function ErrorState({ message, onRetry }: { message: string; onRetry: () => void }) {
+  return (
+    <div className="rounded-lg border border-border bg-white p-12 text-center">
+      <p className="text-sm text-red-600 mb-3">{message}</p>
+      <button onClick={onRetry} className="text-sm font-medium text-brand hover:text-brand-hover transition-colors duration-75">
+        Try again
+      </button>
     </div>
   )
 }
