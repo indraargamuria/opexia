@@ -42,7 +42,7 @@ function Login() {
     <div className="min-h-screen flex">
       <div className="hidden lg:flex lg:w-1/2 bg-dark-accent flex-col justify-between p-12">
         <div>
-          <span className="text-2xl font-bold text-white tracking-tight">OPX</span>
+          <span className="text-2xl font-bold text-white tracking-tight">OPEXIA</span>
         </div>
 
         <div className="space-y-6">
@@ -81,7 +81,7 @@ function Login() {
       <div className="w-full lg:w-1/2 bg-light-bg flex items-center justify-center p-8 lg:p-12">
         <div className="w-full max-w-sm space-y-8">
           <div className="lg:hidden">
-            <span className="text-xl font-bold text-dark-accent tracking-tight">OPX</span>
+            <span className="text-xl font-bold text-dark-accent tracking-tight">OPEXIA</span>
           </div>
 
           <div className="space-y-2">
