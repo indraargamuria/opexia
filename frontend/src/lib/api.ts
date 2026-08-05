@@ -1,10 +1,15 @@
 import { buildQueryString } from '@/lib/query'
+import { getSession } from '@/lib/session'
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8787'
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, {
-    headers: { 'Content-Type': 'application/json', ...init?.headers },
+    headers: {
+      'Content-Type': 'application/json',
+      'X-User-Id': getSession().id,
+      ...init?.headers,
+    },
     ...init,
   })
   if (!res.ok) {

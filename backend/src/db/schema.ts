@@ -21,10 +21,16 @@ export const users = sqliteTable(
     email: text('email').notNull().unique(),
     name: text('name').notNull(),
     avatarUrl: text('avatar_url'),
+    role: text('role', {
+      enum: ['worker', 'manager', 'admin', 'viewer'],
+    })
+      .notNull()
+      .default('worker'),
     ...timestamps,
   },
   (t) => [
     index('idx_users_email').on(t.email),
+    index('idx_users_role').on(t.role),
   ],
 );
 

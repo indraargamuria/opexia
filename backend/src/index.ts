@@ -12,8 +12,15 @@ import { isValidHexColor } from './lib/tags'
 import { buildEntryFilters, isFinalized, isWithinEditWindow, reviewBlockReason } from './lib/timeEntries'
 import { isOverdue, isUnderMinDuration, maxDurationMinutes } from './lib/timer'
 import { weekBounds, utilizationPercent, roundedHours } from './lib/reports'
+import { userRoles, isUserRole, canApprove, canViewAuditLogs, isGlobalAdmin } from './lib/rbac'
+import type { UserRole } from './lib/rbac'
 
-const app = new Hono<{ Bindings: { opexai_db: any } }>()
+type AppEnv = {
+  Bindings: { opexai_db: any }
+  Variables: { userId?: string; userRole?: UserRole }
+}
+
+const app = new Hono<AppEnv>()
 
 app.use('*', logger())
 app.use('*', cors({
@@ -26,6 +33,44 @@ app.use('*', cors({
 function db(c: any) {
   return drizzle(c.env.opexai_db, { schema })
 }
+
+// ─── RBAC (stub auth until Phase 6) ─────────────────────────────────────────
+// The client identifies itself with an `X-User-Id` header. The caller's global
+// role is resolved from `users.role`. Requests without a resolvable header fall
+// back to a stub admin so local tooling keeps working during the stub-auth phase.
+
+const auth = async (c: any, next: () => Promise<void>) => {
+  const headerId = c.req.header('x-user-id')
+  if (headerId) {
+    const d = db(c)
+    const user = await d.query.users.findFirst({
+      columns: { id: true, role: true },
+      where: eq(schema.users.id, headerId),
+    })
+    if (user && isUserRole(user.role)) {
+      c.set('userId', user.id)
+      c.set('userRole', user.role)
+    }
+  }
+  if (!c.get('userRole')) {
+    c.set('userRole', 'admin')
+  }
+  await next()
+}
+
+const requireRole = (...roles: UserRole[]) => async (c: any, next: () => Promise<void>) => {
+  const role: UserRole | undefined = c.get('userRole')
+  if (!role || !roles.includes(role)) {
+    return c.json({ error: 'Forbidden: insufficient permissions' }, 403)
+  }
+  await next()
+}
+
+const APPROVE_ROLES = userRoles.filter(canApprove)
+const AUDIT_ROLES = userRoles.filter(canViewAuditLogs)
+const ADMIN_ROLES = userRoles.filter(isGlobalAdmin)
+
+app.use('/api/v1/*', auth)
 
 async function projectIsArchived(d: any, projectId: string): Promise<boolean> {
   const project = await d.query.projects.findFirst({
@@ -54,7 +99,7 @@ app.get('/api/v1/clients/:id', async (c) => {
   return c.json(row)
 })
 
-app.post('/api/v1/clients', async (c) => {
+app.post('/api/v1/clients', requireRole(...ADMIN_ROLES), async (c) => {
   const d = db(c)
   const body = await c.req.json()
   if (!body.name || !body.code) {
@@ -81,7 +126,7 @@ app.post('/api/v1/clients', async (c) => {
   }
 })
 
-app.patch('/api/v1/clients/:id', async (c) => {
+app.patch('/api/v1/clients/:id', requireRole(...ADMIN_ROLES), async (c) => {
   const d = db(c)
   const body = await c.req.json()
   if (body.code !== undefined && (typeof body.code !== 'string' || !isValidClientCode(body.code))) {
@@ -109,7 +154,7 @@ app.patch('/api/v1/clients/:id', async (c) => {
   }
 })
 
-app.delete('/api/v1/clients/:id', async (c) => {
+app.delete('/api/v1/clients/:id', requireRole(...ADMIN_ROLES), async (c) => {
   const d = db(c)
   const id = c.req.param('id')
   const client = await d.query.clients.findFirst({ where: eq(schema.clients.id, id) })
@@ -162,7 +207,7 @@ app.get('/api/v1/projects/:id', async (c) => {
   return c.json(row)
 })
 
-app.post('/api/v1/projects', async (c) => {
+app.post('/api/v1/projects', requireRole(...ADMIN_ROLES), async (c) => {
   const d = db(c)
   const body = await c.req.json()
   if (!body.name || !body.code || !body.clientId) {
@@ -197,7 +242,7 @@ app.post('/api/v1/projects', async (c) => {
   return c.json(row, 201)
 })
 
-app.patch('/api/v1/projects/:id', async (c) => {
+app.patch('/api/v1/projects/:id', requireRole(...ADMIN_ROLES), async (c) => {
   const d = db(c)
   const id = c.req.param('id')
   const body = await c.req.json()
@@ -229,7 +274,7 @@ app.patch('/api/v1/projects/:id', async (c) => {
   return c.json(row)
 })
 
-app.delete('/api/v1/projects/:id', async (c) => {
+app.delete('/api/v1/projects/:id', requireRole(...ADMIN_ROLES), async (c) => {
   const d = db(c)
   const id = c.req.param('id')
   const project = await d.query.projects.findFirst({ where: eq(schema.projects.id, id) })
@@ -249,7 +294,7 @@ app.delete('/api/v1/projects/:id', async (c) => {
 
 // ─── Users ─────────────────────────────────────────────────────────────────
 
-app.get('/api/v1/users', async (c) => {
+app.get('/api/v1/users', requireRole(...ADMIN_ROLES), async (c) => {
   const d = db(c)
   const users = await d.query.users.findMany({
     orderBy: [asc(schema.users.name)],
@@ -293,7 +338,7 @@ app.get('/api/v1/team-members/:id', async (c) => {
   return c.json(row)
 })
 
-app.post('/api/v1/team-members', async (c) => {
+app.post('/api/v1/team-members', requireRole(...ADMIN_ROLES), async (c) => {
   const d = db(c)
   const body = await c.req.json()
   if (!body.userId || !body.projectId) {
@@ -311,7 +356,7 @@ app.post('/api/v1/team-members', async (c) => {
   return c.json(row, 201)
 })
 
-app.patch('/api/v1/team-members/:id', async (c) => {
+app.patch('/api/v1/team-members/:id', requireRole(...ADMIN_ROLES), async (c) => {
   const d = db(c)
   const body = await c.req.json()
   if (body.role !== undefined && !isValidTeamRole(body.role)) {
@@ -329,7 +374,7 @@ app.patch('/api/v1/team-members/:id', async (c) => {
   return c.json(row)
 })
 
-app.delete('/api/v1/team-members/:id', async (c) => {
+app.delete('/api/v1/team-members/:id', requireRole(...ADMIN_ROLES), async (c) => {
   const d = db(c)
   const id = c.req.param('id')
   const existing = await d.query.teamMembers.findFirst({ where: eq(schema.teamMembers.id, id) })
@@ -367,7 +412,7 @@ app.get('/api/v1/tags/:id', async (c) => {
   return c.json({ ...row, usageCount: Number(countRow.count) })
 })
 
-app.post('/api/v1/tags', async (c) => {
+app.post('/api/v1/tags', requireRole(...ADMIN_ROLES), async (c) => {
   const d = db(c)
   const body = await c.req.json()
   if (!body.name) {
@@ -392,7 +437,7 @@ app.post('/api/v1/tags', async (c) => {
   }
 })
 
-app.patch('/api/v1/tags/:id', async (c) => {
+app.patch('/api/v1/tags/:id', requireRole(...ADMIN_ROLES), async (c) => {
   const d = db(c)
   const body = await c.req.json()
   if (body.color !== undefined && !isValidHexColor(body.color)) {
@@ -418,7 +463,7 @@ app.patch('/api/v1/tags/:id', async (c) => {
   }
 })
 
-app.delete('/api/v1/tags/:id', async (c) => {
+app.delete('/api/v1/tags/:id', requireRole(...ADMIN_ROLES), async (c) => {
   const d = db(c)
   const id = c.req.param('id')
   const tag = await d.query.tags.findFirst({ where: eq(schema.tags.id, id) })
@@ -544,7 +589,22 @@ app.patch('/api/v1/time-entries/:id', async (c) => {
 
 // ─── Approval workflow ──────────────────────────────────────────────────────
 
-app.post('/api/v1/time-entries/:id/approve', async (c) => {
+async function writeAudit(
+  d: any,
+  entry: { entityType: string; entityId: string; action: string; actorId: string; payload?: Record<string, unknown> },
+) {
+  const cs = await checksum(`${entry.entityType}${entry.entityId}${entry.action}${entry.actorId}${Date.now()}`)
+  await d.insert(schema.auditLogs).values({
+    entityType: entry.entityType,
+    entityId: entry.entityId,
+    action: entry.action,
+    actorId: entry.actorId,
+    payload: entry.payload ? JSON.stringify(entry.payload) : undefined,
+    checksum: cs,
+  })
+}
+
+app.post('/api/v1/time-entries/:id/approve', requireRole(...APPROVE_ROLES), async (c) => {
   const d = db(c)
   const id = c.req.param('id')
   const body = await c.req.json().catch(() => ({}))
@@ -566,10 +626,11 @@ app.post('/api/v1/time-entries/:id/approve', async (c) => {
     })
     .where(eq(schema.timeEntries.id, id))
     .returning()
+  await writeAudit(d, { entityType: 'time_entry', entityId: id, action: 'approved', actorId: body.actorId })
   return c.json(row)
 })
 
-app.post('/api/v1/time-entries/:id/reject', async (c) => {
+app.post('/api/v1/time-entries/:id/reject', requireRole(...APPROVE_ROLES), async (c) => {
   const d = db(c)
   const id = c.req.param('id')
   const body = await c.req.json().catch(() => ({}))
@@ -594,10 +655,11 @@ app.post('/api/v1/time-entries/:id/reject', async (c) => {
     })
     .where(eq(schema.timeEntries.id, id))
     .returning()
+  await writeAudit(d, { entityType: 'time_entry', entityId: id, action: 'rejected', actorId: body.actorId, payload: { reason: String(body.rejectionReason).trim() } })
   return c.json(row)
 })
 
-app.post('/api/v1/time-entries/approve-batch', async (c) => {
+app.post('/api/v1/time-entries/approve-batch', requireRole(...APPROVE_ROLES), async (c) => {
   const d = db(c)
   const body = await c.req.json().catch(() => ({}))
   if (!body.actorId) return c.json({ error: 'actorId is required' }, 400)
@@ -633,6 +695,15 @@ app.post('/api/v1/time-entries/approve-batch', async (c) => {
     approved.push(row)
   }
   return c.json({ approved, skipped })
+})
+
+app.get('/api/v1/audit-logs', requireRole(...AUDIT_ROLES), async (c) => {
+  const d = db(c)
+  const rows = await d.query.auditLogs.findMany({
+    with: { actor: true },
+    orderBy: [desc(schema.auditLogs.createdAt)],
+  })
+  return c.json(rows)
 })
 
 // ─── Reports ────────────────────────────────────────────────────────────────

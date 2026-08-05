@@ -1,7 +1,7 @@
 # PROGRESS.md — Opexia Project Tracker
 
 **Last Updated:** 2026-08-05
-**Current Phase:** Phase 0–1: Test Infrastructure & Master Data Management
+**Current Phase:** Phase 3: Approval Workflow & RBAC
 
 ---
 
@@ -106,13 +106,21 @@
 | Task | Status |
 |------|--------|
 | 3.1 Approve / reject endpoints | Complete |
-| 3.2 RBAC middleware | Pending |
+| 3.2 RBAC middleware | Complete |
 | 3.3 Route guards & conditional UI | Pending |
 
 ### 3.1 Approve / Reject Endpoints
 - **Backend:** `src/lib/timeEntries.ts` — `reviewBlockReason` (pending only; running → "stop the timer", approved/invoiced → finalized, rejected → must resubmit); `POST /api/v1/time-entries/:id/approve` (records `approvedBy`/`approvedAt`, recomputes checksum), `POST /api/v1/time-entries/:id/reject` (requires non-empty `rejectionReason`, records reviewer), `POST /api/v1/time-entries/approve-batch` (approves all pending ids, returns `{ approved, skipped }` with per-id reasons; 400 empty/actor missing, 404 unknown id); PATCH now exempts `rejected` entries from the edit-window check and resubmits them to `pending`, clearing `rejectionReason`
 - **Frontend:** new `/approvals` route (sidebar "Approvals") — status filter (pending/approved/rejected/all), checkbox batch select with Approve/Reject Selected toolbar, per-row Approve/Reject, reject-reason modal (required), lock icon + "Locked" label on approved/invoiced rows, rejection note shown inline on rejected rows; `useApproveTimeEntry`/`useRejectTimeEntry`/`useApproveTimeEntries` hooks invalidate entries + reports
 - **Tests:** `reviewBlockReason` unit case; `test/approvals.integration.test.ts` (10: actorId/reason required, reject requires reason + records reviewer, approve transitions + approver + checksum change, 409 on running/approved/rejected review, 404 unknown, rejected-edit resubmits + clears reason, full workflow submit→reject→edit→resubmit→approve→locked, batch input validation + unknown 404, batch approves 2 / skips finalized with reason)
+
+### 3.2 RBAC Middleware
+- **Backend:** `src/lib/rbac.ts` — `userRoles` (`worker`/`manager`/`admin`/`viewer`), `isUserRole`, permission functions (`canLogOwnTime`, `canEditAnyEntry`, `canApprove`, `canViewTeamReports`, `canViewOrgReports`, `canManageMasterData`, `canManageUsers`, `canViewAuditLogs`, `canExport`, `isGlobalAdmin`), `projectRole(globalRole, membershipRole)`
+- `users.role` column (default `worker`) via migration `0002_add_users_role.sql`; `AppEnv` Variables `userId`/`userRole`; `auth` middleware resolves identity from `X-User-Id` header (missing/unknown falls back to stub admin); `requireRole(...roles)` returns 403 `Forbidden: insufficient permissions`
+- Guarded mutations: clients POST/PATCH/DELETE, projects POST/PATCH/DELETE, users GET, team-members POST/PATCH/DELETE, tags POST/PATCH/DELETE, approvals (approve/reject/approve-batch) — all via `requireRole` at route registration
+- `writeAudit` helper inserts into `audit_logs` (entityType/entityId/action/actorId/payload/checksum); wired into approve, reject, and batch-approve (per approved entry); `GET /api/v1/audit-logs` (admin only, ordered desc, with actor relation)
+- **Frontend:** `lib/session.ts` (stub session `DEMO_USER_ID`/`DEMO_ROLE=admin` until Phase 6 auth), `lib/rbac.ts` (permission matrix mirroring backend, `hasPermission`/`hasAnyRole`/`isRole`); `lib/api.ts` request now sends `X-User-Id` so backend RBAC resolves a real caller
+- **Tests:** `test/rbac.test.ts` (unit: role enum, PRD §2.3 permission matrix per role, `projectRole` fallback/membership-wins), `test/rbac.integration.test.ts` (9: stub-admin no-header, viewer approve 403, manager approve 200, worker master-data 403, admin users/master-data 200, unknown-header fallback, audit-logs admin 200 + manager/viewer 403, approve writes audit row, team_members role stored); frontend `session.test.ts` + `rbac.test.ts`
 
 ## Completed Features
 
@@ -302,7 +310,7 @@ backend/
 
 | Table | Key Columns | Constraints |
 |-------|------------|-------------|
-| **users** | id (PK), email (unique), name, avatarUrl, timestamps | idx on email |
+| **users** | id (PK), email (unique), name, avatarUrl, **role** (worker/manager/admin/viewer, default worker), timestamps | idx on email, role |
 | **clients** | id (PK), name (unique), code (unique), billingRate, currency, address, isActive, timestamps | idx on code, isActive |
 | **projects** | id (PK), clientId (FK→clients), name, code, description, status, budgetHours, budgetCost, startDate, endDate, timestamps | idx on clientId, status, (clientId+status) |
 | **team_members** | id (PK), userId (FK→users), projectId (FK→projects), role, billableRate, assignedAt, timestamps | idx on userId, projectId, (userId+projectId), role |
@@ -341,6 +349,10 @@ time_entries ──N:1──> users (approved_by)
 | `POST` | `/api/v1/timer/start` | Complete | Start timer (status: running, entryMethod: timer) |
 | `POST` | `/api/v1/timer/stop` | Complete | Stop timer (compute duration, generate checksum, status: pending) |
 | `GET` | `/api/v1/timer/current` | Complete | Fetch active running timer for user |
+| `POST` | `/api/v1/time-entries/:id/approve` | Complete | Approve entry (manager/admin) |
+| `POST` | `/api/v1/time-entries/:id/reject` | Complete | Reject with note (manager/admin) |
+| `POST` | `/api/v1/time-entries/approve-batch` | Complete | Batch approve (manager/admin) |
+| `GET` | `/api/v1/audit-logs` | Complete | Audit trail (admin only) |
 
 #### Backend Integration Roadmap
 

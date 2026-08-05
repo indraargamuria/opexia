@@ -194,11 +194,11 @@ Based on the PRD approval flow and Dashboard status badges.
 - **Unit:** approve/reject state machine, reason required, batch semantics. **Type check:** both. **Integration:** worker submits → manager rejects with note → worker edits → resubmits → approves → locked.
 - **Commit:** `feat(approvals): approve/reject workflow + batch queue` — **done 2026-08-05**
 
-#### Task 3.2 — RBAC middleware 🟪
+#### Task 3.2 — RBAC middleware 🟪 ✅
 - **Backend:** auth-aware middleware resolving the caller's role per project (worker/manager/admin/viewer) from `team_members` + global admin; route guards for reports/audit/export.
 - **Frontend:** role-aware API client that includes the session (stub user for now, real in Phase 6).
 - **Unit:** permission matrix (PRD §2.3), role resolution. **Type check:** both. **Integration:** viewer denied approve → 403; admin allowed audit logs.
-- **Commit:** `feat(rbac): role-based route guards backend + frontend`
+- **Commit:** `feat(rbac): role-based route guards backend + frontend` — **done 2026-08-05**
 
 #### Task 3.3 — Route guards & conditional UI 🟪
 - **Frontend:** TanStack Router guards — workers cannot open admin-only pages; sidebar hides Reports/Team/Tags for workers; login redirect for unauthenticated.

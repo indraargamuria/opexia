@@ -21,12 +21,16 @@ export async function apiRequest(
   method: string,
   path: string,
   body?: Record<string, unknown>,
+  headers?: Record<string, string>,
 ) {
   const res = await app.request(
     path,
     {
       method,
-      headers: body ? { 'Content-Type': 'application/json' } : undefined,
+      headers: {
+        ...(body ? { 'Content-Type': 'application/json' } : {}),
+        ...headers,
+      },
       body: body ? JSON.stringify(body) : undefined,
     },
     env as never,
@@ -43,6 +47,7 @@ export async function seedUser(env: TestEnv, overrides: Partial<typeof schema.us
   const [row] = await db(env).insert(schema.users).values({
     email: overrides.email ?? `user-${crypto.randomUUID().slice(0, 8)}@opexia.test`,
     name: overrides.name ?? 'Test User',
+    role: overrides.role ?? 'worker',
     ...overrides,
   }).returning()
   return row
