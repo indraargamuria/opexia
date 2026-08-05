@@ -13,6 +13,15 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  clients: {
+    list: () => request<unknown[]>('/api/v1/clients'),
+    create: (data: Record<string, unknown>) =>
+      request<unknown>('/api/v1/clients', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: string, data: Record<string, unknown>) =>
+      request<unknown>(`/api/v1/clients/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    remove: (id: string) =>
+      request<unknown>(`/api/v1/clients/${id}`, { method: 'DELETE' }),
+  },
   projects: {
     list: () => request<unknown[]>('/api/v1/projects'),
     create: (data: Record<string, unknown>) =>

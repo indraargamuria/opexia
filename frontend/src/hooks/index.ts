@@ -1,3 +1,4 @@
+export { useClients, useCreateClient, useUpdateClient, useDeleteClient } from './useClients'
 export { useProjects, useCreateProject } from './useProjects'
 export { useTeamMembers, useAssignTeamMember } from './useTeamMembers'
 export { useTags, useCreateTag } from './useTags'

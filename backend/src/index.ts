@@ -2,9 +2,10 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { logger } from 'hono/logger'
 import { drizzle } from 'drizzle-orm/d1'
-import { desc, eq, and } from 'drizzle-orm'
+import { desc, eq, and, sql } from 'drizzle-orm'
 import * as schema from './db/schema'
 import { checksum } from './lib/crypto'
+import { isValidClientCode, isUniqueViolation } from './lib/validators'
 
 const app = new Hono<{ Bindings: { opexai_db: any } }>()
 
@@ -19,6 +20,98 @@ app.use('*', cors({
 function db(c: any) {
   return drizzle(c.env.opexai_db, { schema })
 }
+
+// ─── Clients ────────────────────────────────────────────────────────────────
+
+app.get('/api/v1/clients', async (c) => {
+  const d = db(c)
+  const rows = await d.query.clients.findMany({
+    orderBy: [desc(schema.clients.createdAt)],
+  })
+  return c.json(rows)
+})
+
+app.get('/api/v1/clients/:id', async (c) => {
+  const d = db(c)
+  const row = await d.query.clients.findFirst({
+    where: eq(schema.clients.id, c.req.param('id')),
+  })
+  if (!row) return c.json({ error: 'Client not found' }, 404)
+  return c.json(row)
+})
+
+app.post('/api/v1/clients', async (c) => {
+  const d = db(c)
+  const body = await c.req.json()
+  if (!body.name || !body.code) {
+    return c.json({ error: 'name and code are required' }, 400)
+  }
+  if (typeof body.code !== 'string' || !isValidClientCode(body.code)) {
+    return c.json({ error: 'code must be alphanumeric plus hyphens only' }, 400)
+  }
+  try {
+    const [row] = await d.insert(schema.clients).values({
+      name: body.name,
+      code: body.code,
+      billingRate: body.billingRate,
+      currency: body.currency ?? 'USD',
+      address: body.address,
+      isActive: body.isActive ?? true,
+    }).returning()
+    return c.json(row, 201)
+  } catch (err) {
+    if (isUniqueViolation(err)) {
+      return c.json({ error: 'A client with this name or code already exists' }, 409)
+    }
+    throw err
+  }
+})
+
+app.patch('/api/v1/clients/:id', async (c) => {
+  const d = db(c)
+  const body = await c.req.json()
+  if (body.code !== undefined && (typeof body.code !== 'string' || !isValidClientCode(body.code))) {
+    return c.json({ error: 'code must be alphanumeric plus hyphens only' }, 400)
+  }
+  const patch: Record<string, unknown> = {}
+  if (body.name !== undefined) patch.name = body.name
+  if (body.code !== undefined) patch.code = body.code
+  if (body.billingRate !== undefined) patch.billingRate = body.billingRate
+  if (body.currency !== undefined) patch.currency = body.currency
+  if (body.address !== undefined) patch.address = body.address
+  if (body.isActive !== undefined) patch.isActive = body.isActive
+  try {
+    const [row] = await d.update(schema.clients)
+      .set({ ...patch, updatedAt: new Date() })
+      .where(eq(schema.clients.id, c.req.param('id')))
+      .returning()
+    if (!row) return c.json({ error: 'Client not found' }, 404)
+    return c.json(row)
+  } catch (err) {
+    if (isUniqueViolation(err)) {
+      return c.json({ error: 'A client with this name or code already exists' }, 409)
+    }
+    throw err
+  }
+})
+
+app.delete('/api/v1/clients/:id', async (c) => {
+  const d = db(c)
+  const id = c.req.param('id')
+  const client = await d.query.clients.findFirst({ where: eq(schema.clients.id, id) })
+  if (!client) return c.json({ error: 'Client not found' }, 404)
+  const [countRow] = await d.select({ count: sql<number>`count(*)` })
+    .from(schema.projects)
+    .where(eq(schema.projects.clientId, id))
+  if (Number(countRow.count) > 0) {
+    return c.json({ error: 'Client has associated projects and cannot be deleted' }, 409)
+  }
+  const [row] = await d.update(schema.clients)
+    .set({ isActive: false, updatedAt: new Date() })
+    .where(eq(schema.clients.id, id))
+    .returning()
+  return c.json(row)
+})
 
 // ─── Projects ───────────────────────────────────────────────────────────────
 

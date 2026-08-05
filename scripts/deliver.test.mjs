@@ -30,8 +30,12 @@ test('runGates runs every gate when all succeed', () => {
   assert.deepEqual(calls, ['npm run test', 'npm run typecheck', 'npm run test', 'npm run typecheck'])
 })
 
-test('parseArgs reads --message flag', () => {
-  assert.deepEqual(parseArgs(['--message', 'feat(x): y']), { message: 'feat(x): y' })
+test('parseArgs reads --msg flag', () => {
+  assert.deepEqual(parseArgs(['--msg', 'feat(x): y']), { message: 'feat(x): y' })
+})
+
+test('parseArgs accepts a positional message', () => {
+  assert.deepEqual(parseArgs(['feat(x): y']), { message: 'feat(x): y' })
 })
 
 test('parseArgs falls back to COMMIT_MSG env', () => {

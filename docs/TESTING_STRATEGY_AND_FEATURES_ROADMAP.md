@@ -65,7 +65,7 @@ A task ships **only** when the automation below reports green:
 
 ### 1.5 Auto Commit & Push Automation
 
-A shared script (e.g. `scripts/deliver.mjs` at repo root) executes the gates and only then commits and pushes. It reads the task's commit message from `COMMIT_MSG` env or a `--message` flag.
+A shared script (e.g. `scripts/deliver.mjs` at repo root) executes the gates and only then commits and pushes. It reads the task's commit message from a `--msg` flag (or `COMMIT_MSG` env / positional arg).
 
 ```jsonc
 // frontend/package.json (same pattern in backend/)
@@ -124,7 +124,7 @@ Sets up the gates so every later task is automatically verifiable and self-shipp
 
 #### Task 0.4 — Auto commit & push automation 🟪 ✅
 - Add root `scripts/deliver.mjs` implementing the gate-then-commit-then-push flow from §1.5.
-- Add `npm run deliver -- --message "..."` at root.
+- Add `npm run deliver -- --msg "..."` at root.
 - **Unit:** unit-test the gate runner with a mocked shell (failing gate must abort). **Type check:** clean. **Integration:** dry-run that a green pipeline ends with a commit.
 - **Commit:** `ci: add gate-based auto commit & push pipeline` — **done 2026-08-05**
 
@@ -134,11 +134,11 @@ Sets up the gates so every later task is automatically verifiable and self-shipp
 
 Based on the **Projects**, **Team**, and **Tags** pages. Completes the CRUD surface the pages render and hardens business rules from PRD §3.1.
 
-#### Task 1.1 — Clients module 🟪
+#### Task 1.1 — Clients module 🟪 ✅
 - **Backend:** full CRUD `/api/v1/clients` (list, get by id, create, patch, soft-delete `is_active=false`). Validations: unique `name`/`code`, alphanumeric+hyphen `code`. Restrict delete when projects exist.
 - **Frontend:** surface client picker in the Projects page; add a client management section (or drawer) listing clients with active toggle.
 - **Unit:** code-format validator, unique-violation mapping, soft-delete guard. **Type check:** both. **Integration:** create → project references client → soft-delete blocked with projects.
-- **Commit:** `feat(clients): full CRUD + projects page integration`
+- **Commit:** `feat(clients): full CRUD + projects page integration` — **done 2026-08-05**
 
 #### Task 1.2 — Projects module completion 🟪
 - **Backend:** add `GET /:id`, `PATCH /:id`, `DELETE` (soft/restrict), status transition validation (`planning→active→completed→archived`, no new entries on `archived`), `end_date ≥ start_date`, budget warnings at 75/90/100%.
@@ -308,7 +308,7 @@ Branch  ──►  Task  ──►  Implement (FE + BE)  ──►  Unit tests
 
 1. One task = one slice = one commit.
 2. `npm run test`, `npm run typecheck`, `npm run test:integration` must all pass.
-3. `npm run deliver -- --message "feat(area): summary"` gates, commits, and pushes.
+3. `npm run deliver -- --msg "feat(area): summary"` gates, commits, and pushes.
 4. After each push, update `docs/PROGRESS.md` (mark the task complete) in the same commit when applicable.
 
 ## 4. Test Coverage Targets

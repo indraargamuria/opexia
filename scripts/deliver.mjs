@@ -27,8 +27,9 @@ export function runGates(exec = execSync, gates = GATES, rootDir = ROOT) {
 }
 
 export function parseArgs(argv = process.argv.slice(2), env = process.env) {
-  const flagIndex = argv.indexOf('--message')
+  const flagIndex = argv.indexOf('--msg') !== -1 ? argv.indexOf('--msg') : argv.indexOf('--message')
   if (flagIndex !== -1 && argv[flagIndex + 1]) return { message: argv[flagIndex + 1] }
+  if (argv.length > 0 && !argv[0].startsWith('-')) return { message: argv[0] }
   if (env.COMMIT_MSG) return { message: env.COMMIT_MSG }
   return { message: null }
 }

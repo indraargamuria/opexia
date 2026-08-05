@@ -35,9 +35,26 @@
 
 ### 0.4 Auto Commit & Push Automation
 - `scripts/deliver.mjs`: gate-then-commit-then-push pipeline — runs frontend test+typecheck, backend test+typecheck, then `git add -A && git commit && git push`; aborts without committing on any gate failure
-- Message from `--message` flag or `COMMIT_MSG` env; Windows-aware (`npm.cmd`)
-- `scripts/deliver.test.mjs`: 7 unit tests (failing gate aborts, all-green flow, arg parsing, no-message guard)
-- Root `package.json` with `npm run deliver -- --message "..."` and `npm test`
+- Message from `--msg` flag, positional arg, or `COMMIT_MSG` env; Windows-aware (`npm.cmd`)
+- `scripts/deliver.test.mjs`: 8 unit tests (failing gate aborts, all-green flow, arg parsing, no-message guard)
+- Root `package.json` with `npm run deliver -- --msg "..."` and `npm test`
+
+---
+
+## Phase 1 — Master Data Management
+
+| Task | Status |
+|------|--------|
+| 1.1 Clients module (backend CRUD + frontend) | Complete |
+| 1.2 Projects module completion (PATCH/DELETE/status/budget) | Pending |
+| 1.3 Team Members module completion (PATCH/DELETE) | Pending |
+| 1.4 Tags module completion (PATCH/DELETE) | Pending |
+
+### 1.1 Clients Module
+- **Backend:** full CRUD `/api/v1/clients` — GET list, GET by id, POST, PATCH (incl. `is_active` toggle), DELETE (soft-delete, blocked with 409 when projects reference the client)
+- Validators: `isValidClientCode` (alphanumeric + hyphens), `isUniqueViolation` (walks error cause chain for DrizzleQueryError)
+- **Frontend:** `lib/validation.ts`, `api.clients.*`, `useClients/useCreateClient/useUpdateClient/useDeleteClient` hooks; Projects page now has a working "New Project" modal with client picker and a Clients management section (add form + active toggle + delete)
+- **Tests:** `test/clients.integration.test.ts` (10), `test/validators.test.ts` (4), `validation.test.ts` (2)
 
 ---
 
