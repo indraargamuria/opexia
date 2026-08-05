@@ -172,6 +172,8 @@ export const timeEntries = sqliteTable(
     index('idx_time_entries_status').on(t.status),
     index('idx_time_entries_started_at').on(t.startedAt),
     index('idx_time_entries_user_started').on(t.userId, t.startedAt),
+    index('idx_time_entries_project_started').on(t.projectId, t.startedAt),
+    index('idx_time_entries_user_status_started').on(t.userId, t.status, t.startedAt),
     index('idx_time_entries_project_status').on(t.projectId, t.status),
     index('idx_time_entries_approved_by').on(t.approvedBy),
   ],

@@ -11,8 +11,8 @@ import { isValidTeamRole } from './lib/teamMembers'
 import { isValidHexColor } from './lib/tags'
 import { buildEntryFilters, isFinalized, isWithinEditWindow, reviewBlockReason } from './lib/timeEntries'
 import { isOverdue, isUnderMinDuration, maxDurationMinutes } from './lib/timer'
-import { weekBounds, utilizationPercent, roundedHours } from './lib/reports'
-import { userRoles, isUserRole, canApprove, canViewAuditLogs, isGlobalAdmin } from './lib/rbac'
+import { weekBounds, utilizationPercent, roundedHours, reportWindow, weeksInWindow, aggregateEntries, costForMinutes, roundMoney, budgetReport, teamUtilizationPercent, WEEKLY_TARGET_HOURS } from './lib/reports'
+import { userRoles, isUserRole, canApprove, canViewAuditLogs, canViewTeamReports, isGlobalAdmin } from './lib/rbac'
 import type { UserRole } from './lib/rbac'
 
 type AppEnv = {
@@ -69,6 +69,7 @@ const requireRole = (...roles: UserRole[]) => async (c: any, next: () => Promise
 const APPROVE_ROLES = userRoles.filter(canApprove)
 const AUDIT_ROLES = userRoles.filter(canViewAuditLogs)
 const ADMIN_ROLES = userRoles.filter(isGlobalAdmin)
+const TEAM_REPORTS_ROLES = userRoles.filter(canViewTeamReports)
 
 app.use('/api/v1/*', auth)
 
@@ -737,6 +738,251 @@ app.get('/api/v1/reports/me', async (c) => {
     activeProjects: Number(row?.projectCount) || 0,
   })
 })
+
+app.get('/api/v1/reports/project/:id', requireRole(...TEAM_REPORTS_ROLES), async (c) => {
+  const d = db(c)
+  const id = c.req.param('id')
+  const parsed = getReportPeriod(c)
+  if (!parsed.ok) return c.json({ error: parsed.error }, 400)
+  const period = parsed.period
+  const project = await d.query.projects.findFirst({
+    where: eq(schema.projects.id, id),
+    with: { client: true },
+  })
+  if (!project) return c.json({ error: 'Project not found' }, 404)
+
+  const scope = and(
+    eq(schema.timeEntries.projectId, id),
+    ne(schema.timeEntries.status, 'rejected'),
+    ne(schema.timeEntries.status, 'running'),
+    gte(schema.timeEntries.startedAt, period.start),
+    lt(schema.timeEntries.startedAt, period.end),
+  )
+
+  const rateRows = await d.select({
+    userId: schema.teamMembers.userId,
+    rate: schema.teamMembers.billableRate,
+  }).from(schema.teamMembers).where(eq(schema.teamMembers.projectId, id))
+  const rates = Object.fromEntries(rateRows.map((r) => [r.userId, r.rate]))
+  const clientRate = project.client?.billingRate
+
+  const entries = await d.select({
+    userId: schema.timeEntries.userId,
+    durationMinutes: schema.timeEntries.durationMinutes,
+  }).from(schema.timeEntries).where(scope)
+
+  const totals = aggregateEntries(entries, rates, clientRate)
+
+  const tagRows = await d.select({
+    userId: schema.timeEntries.userId,
+    durationMinutes: schema.timeEntries.durationMinutes,
+    tagId: schema.tags.id,
+    name: schema.tags.name,
+    color: schema.tags.color,
+    category: schema.tags.category,
+  })
+    .from(schema.timeEntryTags)
+    .innerJoin(schema.timeEntries, eq(schema.timeEntryTags.timeEntryId, schema.timeEntries.id))
+    .innerJoin(schema.tags, eq(schema.timeEntryTags.tagId, schema.tags.id))
+    .where(scope)
+
+  const byTagMap = new Map<string, { tagId: string; name: string; color: string | null; category: string | null; minutes: number; count: number; cost: number }>()
+  for (const row of tagRows) {
+    const minutes = row.durationMinutes ?? 0
+    if (minutes <= 0) continue
+    const bucket = byTagMap.get(row.tagId) ?? { tagId: row.tagId, name: row.name, color: row.color, category: row.category, minutes: 0, count: 0, cost: 0 }
+    bucket.minutes += minutes
+    bucket.count += 1
+    bucket.cost += costForMinutes(minutes, rates[row.userId] ?? clientRate)
+    byTagMap.set(row.tagId, bucket)
+  }
+  const byTag = [...byTagMap.values()]
+    .map((b) => ({ ...b, hours: roundedHours(b.minutes) }))
+    .sort((a, b) => b.minutes - a.minutes)
+
+  return c.json({
+    projectId: id,
+    project: { ...project, client: project.client },
+    period: { dateFrom: period.dateFrom, dateTo: period.dateTo },
+    totals,
+    budget: budgetReport({
+      budgetHours: project.budgetHours,
+      budgetCost: project.budgetCost,
+      loggedHours: totals.hours,
+      actualCost: totals.cost,
+    }),
+    byTag,
+  })
+})
+
+app.get('/api/v1/reports/client/:id', requireRole(...TEAM_REPORTS_ROLES), async (c) => {
+  const d = db(c)
+  const id = c.req.param('id')
+  const parsed = getReportPeriod(c)
+  if (!parsed.ok) return c.json({ error: parsed.error }, 400)
+  const period = parsed.period
+  const client = await d.query.clients.findFirst({ where: eq(schema.clients.id, id) })
+  if (!client) return c.json({ error: 'Client not found' }, 404)
+
+  const projects = await d.query.projects.findMany({ where: eq(schema.projects.clientId, id) })
+  const projectIds = projects.map((p) => p.id)
+
+  const entries = projectIds.length > 0
+    ? await d.select({
+        userId: schema.timeEntries.userId,
+        projectId: schema.timeEntries.projectId,
+        durationMinutes: schema.timeEntries.durationMinutes,
+      }).from(schema.timeEntries).where(and(
+        inArray(schema.timeEntries.projectId, projectIds),
+        ne(schema.timeEntries.status, 'rejected'),
+        ne(schema.timeEntries.status, 'running'),
+        gte(schema.timeEntries.startedAt, period.start),
+        lt(schema.timeEntries.startedAt, period.end),
+      ))
+    : []
+
+  const rateRows = projectIds.length > 0
+    ? await d.select({
+        userId: schema.teamMembers.userId,
+        projectId: schema.teamMembers.projectId,
+        rate: schema.teamMembers.billableRate,
+      }).from(schema.teamMembers).where(inArray(schema.teamMembers.projectId, projectIds))
+    : []
+  const ratesByProject = new Map<string, Record<string, number | null | undefined>>()
+  for (const r of rateRows) {
+    const map = ratesByProject.get(r.projectId) ?? {}
+    map[r.userId] = r.rate
+    ratesByProject.set(r.projectId, map)
+  }
+
+  const perProject = new Map<string, { projectId: string; minutes: number; hours: number; count: number; cost: number }>()
+  for (const p of projects) {
+    perProject.set(p.id, { projectId: p.id, minutes: 0, hours: 0, count: 0, cost: 0 })
+  }
+  for (const e of entries) {
+    const agg = aggregateEntries([e], ratesByProject.get(e.projectId) ?? {}, client.billingRate)
+    const bucket = perProject.get(e.projectId)
+    if (bucket) {
+      bucket.minutes += agg.minutes
+      bucket.count += agg.count
+      bucket.cost = Math.round((bucket.cost + agg.cost) * 100) / 100
+      bucket.hours = roundedHours(bucket.minutes)
+    }
+  }
+
+  const totals = { minutes: 0, hours: 0, count: 0, cost: 0 }
+  for (const b of perProject.values()) {
+    totals.minutes += b.minutes
+    totals.count += b.count
+    totals.cost = roundMoney(totals.cost + b.cost)
+  }
+  totals.hours = roundedHours(totals.minutes)
+  const workerCount = new Set(entries.map((e) => e.userId)).size
+  const byProject = projects.map((p) => {
+    const b = perProject.get(p.id)!
+    return {
+      projectId: p.id,
+      name: p.name,
+      status: p.status,
+      minutes: b.minutes,
+      hours: b.hours,
+      cost: b.cost,
+      budgetUtilization: budgetUtilization(b.hours, p.budgetHours),
+    }
+  })
+
+  return c.json({
+    clientId: id,
+    client,
+    period: { dateFrom: period.dateFrom, dateTo: period.dateTo },
+    totals,
+    projectCount: projects.length,
+    workerCount,
+    weeks: weeksInWindow(period.start, period.end),
+    utilizationPercent: teamUtilizationPercent(totals.minutes, workerCount, weeksInWindow(period.start, period.end)),
+    byProject,
+  })
+})
+
+app.get('/api/v1/reports/team', requireRole(...TEAM_REPORTS_ROLES), async (c) => {
+  const d = db(c)
+  const parsed = getReportPeriod(c)
+  if (!parsed.ok) return c.json({ error: parsed.error }, 400)
+  const period = parsed.period
+  const weeks = weeksInWindow(period.start, period.end)
+
+  const entries = await d.select({
+    userId: schema.timeEntries.userId,
+    projectId: schema.timeEntries.projectId,
+    durationMinutes: schema.timeEntries.durationMinutes,
+  }).from(schema.timeEntries).where(and(
+    ne(schema.timeEntries.status, 'rejected'),
+    ne(schema.timeEntries.status, 'running'),
+    gte(schema.timeEntries.startedAt, period.start),
+    lt(schema.timeEntries.startedAt, period.end),
+  ))
+
+  const byUser = new Map<string, { userId: string; minutes: number; count: number; projects: Set<string> }>()
+  for (const e of entries) {
+    const minutes = e.durationMinutes ?? 0
+    if (minutes <= 0) continue
+    const bucket = byUser.get(e.userId) ?? { userId: e.userId, minutes: 0, count: 0, projects: new Set<string>() }
+    bucket.minutes += minutes
+    bucket.count += 1
+    bucket.projects.add(e.projectId)
+    byUser.set(e.userId, bucket)
+  }
+
+  const userIds = [...byUser.keys()]
+  const users = userIds.length > 0
+    ? await d.select({ id: schema.users.id, name: schema.users.name, email: schema.users.email, role: schema.users.role })
+        .from(schema.users)
+        .where(inArray(schema.users.id, userIds))
+    : []
+  const userMap = new Map(users.map((u) => [u.id, u]))
+
+  const members = [...byUser.values()]
+    .map((b) => ({
+      userId: b.userId,
+      name: userMap.get(b.userId)?.name ?? 'Unknown',
+      email: userMap.get(b.userId)?.email ?? null,
+      role: userMap.get(b.userId)?.role ?? 'worker',
+      minutes: b.minutes,
+      hours: roundedHours(b.minutes),
+      count: b.count,
+      projectCount: b.projects.size,
+      utilizationPercent: utilizationPercent(b.minutes, WEEKLY_TARGET_HOURS * weeks),
+    }))
+    .sort((a, b) => b.minutes - a.minutes)
+
+  const teamMinutes = members.reduce((sum, m) => sum + m.minutes, 0)
+  const averageUtilization = members.length > 0
+    ? Math.round(members.reduce((sum, m) => sum + m.utilizationPercent, 0) / members.length)
+    : 0
+
+  return c.json({
+    period: { dateFrom: period.dateFrom, dateTo: period.dateTo },
+    weeks,
+    members,
+    teamTotals: {
+      minutes: teamMinutes,
+      hours: roundedHours(teamMinutes),
+      activeWorkerCount: members.length,
+      averageUtilizationPercent: averageUtilization,
+    },
+  })
+})
+
+function getReportPeriod(c: any): { ok: true; period: ReturnType<typeof reportWindow> } | { ok: false; error: string } {
+  try {
+    return { ok: true, period: reportWindow(c.req.query('dateFrom'), c.req.query('dateTo')) }
+  } catch (err) {
+    if (err instanceof RangeError) {
+      return { ok: false, error: err.message }
+    }
+    throw err
+  }
+}
 
 // ─── Timer ──────────────────────────────────────────────────────────────────
 

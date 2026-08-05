@@ -22,6 +22,13 @@
       "when": 1785901684259,
       "tag": "0002_add_users_role",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1785903638889,
+      "tag": "0003_add_report_indexes",
+      "breakpoints": true
     }
   ]
 }

@@ -1,7 +1,7 @@
 # PROGRESS.md — Opexia Project Tracker
 
 **Last Updated:** 2026-08-05
-**Current Phase:** Phase 3: Approval Workflow & RBAC
+**Current Phase:** Phase 4: Reports & Export
 
 ---
 
@@ -127,6 +127,24 @@
 - Every protected route (`/`, `/projects`, `/profile`, `/team`, `/approvals`, `/reports`, `/tags`, `/settings`) now has `beforeLoad: routeGuard(...)`; `/login` stays public; `session.ts` adds `isAuthenticated` (localStorage `opexia_token`) + `clearSession`
 - **Sidebar:** nav items carry an optional `permission` and are filtered per session role — workers see only Dashboard/Projects (Team, Approvals, Reports, Tags, Settings hidden); role label under the profile chip renders the session role
 - **Tests:** `routeGuard.test.ts` (unit: access matrix for all four roles, `/login` passthrough, auth persistence); `routeGuard.integration.test.tsx` (3, real router + memory history: logged-out `/` → `/login` renders login page, worker `/settings` → `/`, admin `/settings` stays)
+
+## Phase 4 — Reports & Export
+
+| Task | Status |
+|------|--------|
+| 4.1 Reports backend (project/client/team aggregation) | Complete |
+| 4.2 Reports frontend wiring | Pending |
+| 4.3 Excel export | Pending |
+| 4.4 CSV export | Pending |
+
+### 4.1 Reports Backend Aggregation
+- **lib/reports.ts:** `reportWindow` (90-day default rolling window, validated `dateFrom`/`dateTo`, exclusive end → RangeError on inverted range), `parseDateParam`, `toISODate`, `weeksInWindow`, `roundMoney`, `costForMinutes`, `aggregateEntries` (per-user rates with client-rate fallback), `budgetReport` (utilization + variance), `teamUtilizationPercent` (target = 40h × workers × weeks, capped 100)
+- **Endpoints** (all guarded `TEAM_REPORTS_ROLES` = manager/admin, exclude `rejected`/`running`, window-filtered on `startedAt`):
+  - `GET /api/v1/reports/project/:id` — project + client, `totals` (minutes/hours/count/cost), `budget` (budgetHours/budgetCost/loggedHours/utilization/actualCost/variance), `byTag` breakdown (minutes/hours/count/cost, sorted desc); cost uses team billable rate per user, falling back to client billing rate; 404 unknown, 400 inverted range
+  - `GET /api/v1/reports/client/:id` — `totals` across client projects, `byProject` per-project rollups + `budgetUtilization`, `projectCount`, `workerCount`, `weeks`, `utilizationPercent` (team-scaled); 404 unknown
+  - `GET /api/v1/reports/team` — per-member `minutes/hours/count/projectCount/utilizationPercent` sorted by hours desc, `teamTotals` (minutes/hours/activeWorkerCount/averageUtilizationPercent)
+- **Indexes:** migration `0003_add_report_indexes.sql` — `(project_id, started_at)` and `(user_id, status, started_at)` composites for ≤90-day window queries
+- **Tests:** `reports.test.ts` extended (windowing, date parsing, weeks, money/cost math, aggregation with fallback + zero-skip, budget report, team utilization); `test/reports-rollup.integration.test.ts` (10: project rollup incl. per-tag cost, status/window exclusions, 404/400, RBAC worker/viewer 403 + manager 200, client rollup + byProject + 404, team utilization order/totals, rejected/running exclusion, empty window)
 
 ## Completed Features
 

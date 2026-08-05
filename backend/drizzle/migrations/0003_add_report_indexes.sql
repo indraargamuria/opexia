@@ -1,0 +1,2 @@
+CREATE INDEX `idx_time_entries_project_started` ON `time_entries` (`project_id`,`started_at`);--> statement-breakpoint
+CREATE INDEX `idx_time_entries_user_status_started` ON `time_entries` (`user_id`,`status`,`started_at`);

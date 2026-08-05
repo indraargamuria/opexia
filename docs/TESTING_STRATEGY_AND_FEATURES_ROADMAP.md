@@ -211,10 +211,10 @@ Based on the PRD approval flow and Dashboard status badges.
 
 Based on the **Reports** page.
 
-#### Task 4.1 — Reports backend 🟪
+#### Task 4.1 — Reports backend 🟪 ✅
 - **Backend:** `GET /api/v1/reports/project/:id` (hours by tag, budget vs actual, cost), `GET /api/v1/reports/client/:id` (total hours, cost, utilization), `GET /api/v1/reports/team` (utilization per member). < 200ms p95 for ≤ 90-day windows (composite indexes).
 - **Unit:** aggregation queries, budget-vs-actual math, date windowing. **Type check:** both. **Integration:** seed 3 projects/5 members → assert per-project and per-client rollups.
-- **Commit:** `feat(reports): project/client/team aggregation endpoints`
+- **Commit:** `feat(reports): project/client/team aggregation endpoints` — **done 2026-08-05**
 
 #### Task 4.2 — Reports frontend wiring 🟪
 - **Frontend:** replace Reports mock tables with real aggregation data; period selector (week/month/quarter/custom) drives API filters; utilization color thresholds (brand < 90 / warning / error).
