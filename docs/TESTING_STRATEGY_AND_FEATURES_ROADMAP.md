@@ -176,11 +176,11 @@ Based on the **Dashboard** page and the global **TimeTracker** component.
 - **Unit:** min/max duration rules, auto-stop trigger, single-active-timer. **Type check:** both. **Integration:** start → duplicate start 409 → stop computes duration → pending.
 - **Commit:** `feat(timer): duration policy + optimistic UI` — **done 2026-08-05**
 
-#### Task 2.3 — Dashboard aggregation 🟪
-- **Backend:** `GET /api/v1/reports/me` — weekly total hours, utilization %, active project count for the current user (aggregates in Drizzle).
+#### Task 2.3 — Dashboard aggregation 🟪 ✅
+- **Backend:** `GET /api/v1/reports/me` — weekly total hours (Mon–Sun), utilization % (logged / 40h target, capped 100%), distinct active project count for the current user.
 - **Frontend:** replace Dashboard placeholder metrics with real query data; "Add Manual Entry" opens a working modal (reuse Task 2.1 create).
-- **Unit:** aggregation SQL shape, weekly windowing, utilization formula. **Type check:** both. **Integration:** seed entries across weeks → metric values asserted.
-- **Commit:** `feat(dashboard): real weekly metrics + manual entry modal`
+- **Unit:** week boundary math, utilization formula/cap. **Type check:** both. **Integration:** entries across weeks + rejected status → metrics assert correct.
+- **Commit:** `feat(dashboard): real weekly metrics + manual entry modal` — **done 2026-08-05**
 
 ---
 

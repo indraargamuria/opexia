@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
-import { useTimeEntries, useCreateTimeEntry, useUpdateTimeEntry, useProjects, useTags } from '@/hooks'
+import { useTimeEntries, useCreateTimeEntry, useUpdateTimeEntry, useProjects, useTags, useReportsMe } from '@/hooks'
 
 export const Route = createFileRoute('/')({
   component: Dashboard,
@@ -24,15 +24,14 @@ function Dashboard() {
   }
   const { data: timeEntries = [], isLoading, error, refetch } = useTimeEntries(params)
   const { data: projects = [] } = useProjects()
+  const { data: report } = useReportsMe(DEMO_USER_ID)
 
-  const totalMinutes = timeEntries.reduce((sum: number, e: any) => sum + (e.durationMinutes ?? 0), 0)
+  const totalMinutes = report?.weeklyTotalMinutes ?? 0
   const totalHours = Math.floor(totalMinutes / 60)
   const remainingMins = totalMinutes % 60
   const totalHoursStr = `${totalHours}h ${String(remainingMins).padStart(2, '0')}m`
-
-  const activeProjects = new Set(
-    timeEntries.filter((e: any) => e.project).map((e: any) => e.projectId)
-  ).size
+  const utilizationPercent = report?.utilizationPercent ?? 0
+  const activeProjects = report?.activeProjects ?? 0
 
   const hasFilters = Boolean(params.dateFrom || params.dateTo || params.projectId || params.status)
 
@@ -53,10 +52,10 @@ function Dashboard() {
 
       <div className="grid grid-cols-12 gap-6">
         <div className="col-span-4">
-          <MetricCard label="Total Hours This Week" value={isLoading ? '—' : totalHoursStr} trend={timeEntries.length > 0 ? `${timeEntries.length} entries` : 'No entries yet'} />
+          <MetricCard label="Total Hours This Week" value={isLoading ? '—' : totalHoursStr} trend={report ? `${shortDate(report.weekStart)} — ${shortDate(report.weekEnd)}` : 'This week'} />
         </div>
         <div className="col-span-4">
-          <MetricCard label="Utilization Rate" value="—" trend="Target: 85%" />
+          <MetricCard label="Utilization Rate" value={isLoading ? '—' : `${utilizationPercent}%`} trend="Target: 85%" />
         </div>
         <div className="col-span-4">
           <MetricCard label="Active Projects" value={isLoading ? '—' : String(activeProjects)} trend={activeProjects > 0 ? `${activeProjects} with time logged` : 'No active projects'} />
@@ -259,6 +258,13 @@ function EntryFormModal({ entry, onClose }: { entry?: any; onClose: () => void }
       </form>
     </div>
   )
+}
+
+function shortDate(value: unknown): string {
+  if (!value) return ''
+  const d = new Date(String(value))
+  if (Number.isNaN(d.getTime())) return ''
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 }
 
 function MetricCard({ label, value, trend }: { label: string; value: string; trend: string }) {

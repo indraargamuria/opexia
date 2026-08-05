@@ -22,6 +22,7 @@ export function useCreateTimeEntry() {
     }) => api.timeEntries.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['time-entries'] })
+      queryClient.invalidateQueries({ queryKey: ['reports'] })
     },
   })
 }
@@ -42,6 +43,7 @@ export function useUpdateTimeEntry() {
     }) => api.timeEntries.update(args.id, args.data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['time-entries'] })
+      queryClient.invalidateQueries({ queryKey: ['reports'] })
     },
   })
 }

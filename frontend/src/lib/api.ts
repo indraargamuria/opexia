@@ -14,6 +14,16 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json()
 }
 
+export interface WeeklyReport {
+  userId: string
+  weekStart: string
+  weekEnd: string
+  weeklyTotalMinutes: number
+  weeklyTotalHours: number
+  utilizationPercent: number
+  activeProjects: number
+}
+
 export const api = {
   clients: {
     list: () => request<unknown[]>('/api/v1/clients'),
@@ -69,5 +79,9 @@ export const api = {
       request<unknown>('/api/v1/timer/stop', { method: 'POST', body: JSON.stringify(data) }),
     current: (userId: string) =>
       request<unknown>(`/api/v1/timer/current?userId=${encodeURIComponent(userId)}`),
+  },
+  reports: {
+    me: (userId: string) =>
+      request<WeeklyReport>(`/api/v1/reports/me?userId=${encodeURIComponent(userId)}`),
   },
 }

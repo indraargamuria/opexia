@@ -80,7 +80,8 @@
 |------|--------|
 | 2.1 Time entries CRUD & filtering | Complete |
 | 2.2 Timer hardening | Complete |
-| 2.3 Dashboard aggregation | Pending |
+| 2.3 Dashboard aggregation | Complete |
+| 2.4 Team reports & insights | Pending |
 
 ### 2.1 Time Entries CRUD & Filtering
 - **Backend:** `src/lib/timeEntries.ts` — `isTimeEntryStatus`/`isFinalized` enum helpers, `EDIT_POLICY_WINDOW_DAYS = 7`, `isWithinEditWindow` (worker self-edit policy), `buildEntryFilters` (validated `dateFrom`/`dateTo` mapped to start/end of day, `projectId`, `status`, `userId`)
@@ -93,6 +94,11 @@
 - **Frontend:** `useStartTimer`/`useStopTimer` now optimistic (onMutate sets query data, onError rolls back + refetches); TimeTracker shows a "Timer auto-stopped after the 12h limit" banner when a running timer disappears without a manual stop, plus inline action error messages
 - **Tests:** `test/timer.test.ts` (unit: min duration, overdue at 12h, custom max, 24h admin override), `test/timer.integration.test.ts` (10: duplicate start 409, auto-stop-before-start, stop computes 95min pending, sub-minute discard, 404 no timer, current null/auto-stop/relations/requires userId, single running invariant)
 - **Tests:** `test/tags.test.ts` (unit: hex validator), `test/tags.integration.test.ts` (8: usage counts, get by id, invalid color 400, duplicate 409, PATCH, delete cascades junction rows, delete blocked on invoiced, 404), `color.test.ts` (frontend)
+
+### 2.3 Dashboard Aggregation
+- **Backend:** `src/lib/reports.ts` — `weekBounds` (Monday-start, exclusive 7-day window), `utilizationPercent` (vs 40h target, capped 100), `roundedHours`; `GET /api/v1/reports/me?userId=...` sums `durationMinutes` for non-rejected entries in the current week, counts distinct projects, returns `weeklyTotalMinutes`, `weeklyTotalHours`, `utilizationPercent`, `activeProjects` (400 without userId)
+- **Frontend:** `useReportsMe` + `WeeklyReport` type; Dashboard `Total Hours This Week`, `Utilization Rate`, `Active Projects` cards now render real API data (with week-range subtitle); entry create/update invalidate the report query
+- **Tests:** `test/reports.test.ts` (unit: Monday-start windowing, 7-day invariant, utilization formula/cap, hours rounding), `test/reports.integration.test.ts` (5: requires userId 400, empty zeros, current-week-only + rejected exclusion, distinct project count, 100% cap)
 
 ---
 

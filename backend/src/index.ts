@@ -2,7 +2,7 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { logger } from 'hono/logger'
 import { drizzle } from 'drizzle-orm/d1'
-import { desc, eq, and, sql, asc, gte, lte } from 'drizzle-orm'
+import { desc, eq, and, sql, asc, gte, lte, ne, lt } from 'drizzle-orm'
 import * as schema from './db/schema'
 import { checksum } from './lib/crypto'
 import { isValidClientCode, isUniqueViolation } from './lib/validators'
@@ -11,6 +11,7 @@ import { isValidTeamRole } from './lib/teamMembers'
 import { isValidHexColor } from './lib/tags'
 import { buildEntryFilters, isFinalized, isWithinEditWindow } from './lib/timeEntries'
 import { isOverdue, isUnderMinDuration, maxDurationMinutes } from './lib/timer'
+import { weekBounds, utilizationPercent, roundedHours } from './lib/reports'
 
 const app = new Hono<{ Bindings: { opexai_db: any } }>()
 
@@ -535,6 +536,38 @@ app.patch('/api/v1/time-entries/:id', async (c) => {
     await replaceEntryTags(d, id, body.tagIds)
   }
   return c.json(row)
+})
+
+// ─── Reports ────────────────────────────────────────────────────────────────
+
+app.get('/api/v1/reports/me', async (c) => {
+  const d = db(c)
+  const userId = c.req.query('userId')
+  if (!userId) {
+    return c.json({ error: 'userId query param is required' }, 400)
+  }
+  const { start, end } = weekBounds()
+  const [row] = await d.select({
+    totalMinutes: sql<number>`coalesce(sum(${schema.timeEntries.durationMinutes}), 0)`,
+    projectCount: sql<number>`count(distinct ${schema.timeEntries.projectId})`,
+  })
+    .from(schema.timeEntries)
+    .where(and(
+      eq(schema.timeEntries.userId, userId),
+      ne(schema.timeEntries.status, 'rejected'),
+      gte(schema.timeEntries.startedAt, start),
+      lt(schema.timeEntries.startedAt, end),
+    ))
+  const weeklyTotalMinutes = Number(row?.totalMinutes) || 0
+  return c.json({
+    userId,
+    weekStart: start,
+    weekEnd: end,
+    weeklyTotalMinutes,
+    weeklyTotalHours: roundedHours(weeklyTotalMinutes),
+    utilizationPercent: utilizationPercent(weeklyTotalMinutes),
+    activeProjects: Number(row?.projectCount) || 0,
+  })
 })
 
 // ─── Timer ──────────────────────────────────────────────────────────────────
