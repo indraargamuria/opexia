@@ -12,6 +12,16 @@ import { isValidHexColor } from './lib/tags'
 import { buildEntryFilters, isFinalized, isWithinEditWindow, reviewBlockReason } from './lib/timeEntries'
 import { isOverdue, isUnderMinDuration, maxDurationMinutes } from './lib/timer'
 import {
+  isValidEmail,
+  isValidDateFormat,
+  isValidWeeklyStartDay,
+  isValidHourlyRate,
+  isValidPassword,
+  hashPassword,
+  verifyPassword,
+  MIN_PASSWORD_LENGTH,
+} from './lib/profile'
+import {
   isValidSlug,
   isValidCurrency,
   isValidTimezone,
@@ -90,6 +100,12 @@ const ADMIN_ROLES = userRoles.filter(isGlobalAdmin)
 const TEAM_REPORTS_ROLES = userRoles.filter(canViewTeamReports)
 
 app.use('/api/v1/*', auth)
+
+function stripPasswordHash<T extends { user?: { passwordHash?: string | null } }>(row: T) {
+  if (!row.user) return row
+  const { passwordHash: _ph, ...user } = row.user
+  return { ...row, user }
+}
 
 async function projectIsArchived(d: any, projectId: string): Promise<boolean> {
   const project = await d.query.projects.findFirst({
@@ -325,7 +341,91 @@ app.get('/api/v1/users', requireRole(...ADMIN_ROLES), async (c) => {
     .from(schema.timeEntries)
     .groupBy(schema.timeEntries.userId)
   const loggedByUser = new Map(agg.map((r) => [r.userId, Number(r.minutes) || 0]))
-  return c.json(users.map((u) => ({ ...u, loggedMinutes: loggedByUser.get(u.id) ?? 0 })))
+  return c.json(users.map((u) => {
+    const { passwordHash: _ph, ...rest } = u
+    return { ...rest, loggedMinutes: loggedByUser.get(u.id) ?? 0 }
+  }))
+})
+
+app.get('/api/v1/users/me', async (c) => {
+  const d = db(c)
+  const userId = c.get('userId')
+  if (!userId) return c.json({ error: 'Not authenticated' }, 401)
+  const user = await d.query.users.findFirst({ where: eq(schema.users.id, userId) })
+  if (!user) return c.json({ error: 'User not found' }, 404)
+  const { passwordHash: _ph, ...profile } = user
+  return c.json(profile)
+})
+
+app.patch('/api/v1/users/me', async (c) => {
+  const d = db(c)
+  const userId = c.get('userId')
+  if (!userId) return c.json({ error: 'Not authenticated' }, 401)
+  const body = await c.req.json()
+  const patch: Record<string, unknown> = {}
+  if (body.name !== undefined) {
+    if (typeof body.name !== 'string' || body.name.trim().length === 0) {
+      return c.json({ error: 'name must be a non-empty string' }, 400)
+    }
+    patch.name = body.name.trim()
+  }
+  if (body.email !== undefined) {
+    if (!isValidEmail(body.email)) {
+      return c.json({ error: 'email must be a valid email address' }, 400)
+    }
+    patch.email = body.email
+  }
+  if (body.hourlyRate !== undefined && !isValidHourlyRate(body.hourlyRate)) {
+    return c.json({ error: 'hourlyRate must be a non-negative number or null' }, 400)
+  }
+  patch.hourlyRate = body.hourlyRate
+  if (body.timezone !== undefined && !isValidTimezone(body.timezone)) {
+    return c.json({ error: 'timezone must be a valid IANA timezone' }, 400)
+  }
+  patch.timezone = body.timezone
+  if (body.dateFormat !== undefined && !isValidDateFormat(body.dateFormat)) {
+    return c.json({ error: 'dateFormat must be one of YYYY-MM-DD, DD-MM-YYYY, MM-DD-YYYY' }, 400)
+  }
+  patch.dateFormat = body.dateFormat
+  if (body.weeklyStartDay !== undefined && !isValidWeeklyStartDay(body.weeklyStartDay)) {
+    return c.json({ error: 'weeklyStartDay must be monday or sunday' }, 400)
+  }
+  patch.weeklyStartDay = body.weeklyStartDay
+  const existing = await d.query.users.findFirst({ where: eq(schema.users.id, userId) })
+  if (!existing) return c.json({ error: 'User not found' }, 404)
+  if (patch.email !== undefined && patch.email !== existing.email) {
+    const dup = await d.query.users.findFirst({ where: eq(schema.users.email, patch.email as string) })
+    if (dup) return c.json({ error: 'email already in use' }, 409)
+  }
+  const [row] = await d.update(schema.users)
+    .set({ ...patch, updatedAt: new Date() })
+    .where(eq(schema.users.id, userId))
+    .returning()
+  const { passwordHash: _ph, ...profile } = row
+  return c.json(profile)
+})
+
+app.post('/api/v1/users/me/password', async (c) => {
+  const d = db(c)
+  const userId = c.get('userId')
+  if (!userId) return c.json({ error: 'Not authenticated' }, 401)
+  const body = await c.req.json()
+  if (typeof body.currentPassword !== 'string' || typeof body.newPassword !== 'string') {
+    return c.json({ error: 'currentPassword and newPassword are required' }, 400)
+  }
+  if (!isValidPassword(body.newPassword)) {
+    return c.json({ error: `newPassword must be at least ${MIN_PASSWORD_LENGTH} characters` }, 400)
+  }
+  const existing = await d.query.users.findFirst({ where: eq(schema.users.id, userId) })
+  if (!existing) return c.json({ error: 'User not found' }, 404)
+  if (existing.passwordHash && !(await verifyPassword(body.currentPassword, existing.passwordHash))) {
+    return c.json({ error: 'current password is incorrect' }, 401)
+  }
+  const passwordHash = await hashPassword(body.newPassword)
+  await d.update(schema.users)
+    .set({ passwordHash, updatedAt: new Date() })
+    .where(eq(schema.users.id, userId))
+  return c.json({ ok: true })
 })
 
 // ─── Team Members ───────────────────────────────────────────────────────────
@@ -344,7 +444,7 @@ app.get('/api/v1/team-members', async (c) => {
     .from(schema.timeEntries)
     .groupBy(schema.timeEntries.userId, schema.timeEntries.projectId)
   const loggedByAssignment = new Map(agg.map((r) => [`${r.userId}:${r.projectId}`, Number(r.minutes) || 0]))
-  return c.json(rows.map((r) => ({ ...r, loggedMinutes: loggedByAssignment.get(`${r.userId}:${r.projectId}`) ?? 0 })))
+  return c.json(rows.map((r) => ({ ...stripPasswordHash(r), loggedMinutes: loggedByAssignment.get(`${r.userId}:${r.projectId}`) ?? 0 })))
 })
 
 app.get('/api/v1/team-members/:id', async (c) => {
@@ -354,7 +454,7 @@ app.get('/api/v1/team-members/:id', async (c) => {
     with: { user: true, project: true },
   })
   if (!row) return c.json({ error: 'Team member assignment not found' }, 404)
-  return c.json(row)
+  return c.json(stripPasswordHash(row))
 })
 
 app.post('/api/v1/team-members', requireRole(...ADMIN_ROLES), async (c) => {
@@ -525,7 +625,7 @@ app.get('/api/v1/time-entries', async (c) => {
     where: conditions.length ? and(...conditions) : undefined,
     orderBy: [desc(schema.timeEntries.startedAt)],
   })
-  return c.json(rows)
+  return c.json(rows.map(stripPasswordHash))
 })
 
 app.post('/api/v1/time-entries', async (c) => {

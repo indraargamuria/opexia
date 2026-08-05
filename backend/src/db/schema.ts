@@ -26,6 +26,11 @@ export const users = sqliteTable(
     })
       .notNull()
       .default('worker'),
+    hourlyRate: real('hourly_rate'),
+    timezone: text('timezone').notNull().default('UTC'),
+    dateFormat: text('date_format').notNull().default('YYYY-MM-DD'),
+    weeklyStartDay: text('weekly_start_day').notNull().default('monday'),
+    passwordHash: text('password_hash'),
     ...timestamps,
   },
   (t) => [

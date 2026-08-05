@@ -15,3 +15,4 @@ export {
   useUpdateErpConfig,
   useWipeWorkspace,
 } from './useSettings'
+export { useMe, useUpdateMe, useChangePassword } from './useProfile'

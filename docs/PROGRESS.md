@@ -175,7 +175,7 @@
 | Task | Status |
 |------|--------|
 | 5.1 Workspace settings persistence (workspace, approval policy, ERP) | Complete |
-| 5.2 Profile persistence (personal info + preferences) | Pending |
+| 5.2 Profile persistence (personal info + preferences) | Complete |
 
 ### 5.1 Workspace Settings Persistence
 - **Backend:** three singleton tables (`workspace_settings`, `approval_policy`, `erp_config`, all `id = 'singleton'`) seeded by migration `0004_add_settings_tables.sql` via `INSERT OR IGNORE`
@@ -187,6 +187,16 @@
 - **Tests:** `settings.test.ts` (validators), `settings.integration.test.ts` (GET defaults, PATCH round-trips + validation 400s, worker 403, Danger Zone wipe, policy→timer integration); frontend `settings.integration.test.tsx` (4: renders persisted values, workspace PATCH + Saved indicator, approval/erp PATCHes, typed-confirmation delete)
 - **Live smoke:** GET singletons 200, PATCH round-trip + 400 invalid slug, worker 403, dev servers on 3700/5700
 - **Commit:** `feat(settings): workspace + approval policy + erp config`
+
+### 5.2 Profile Persistence
+- **Backend:** migration `0005_add_users_profile.sql` adds `users.hourly_rate`, `timezone` (default `UTC`), `date_format` (default `YYYY-MM-DD`), `weekly_start_day` (default `monday`), `password_hash`
+- **lib/profile.ts:** `isValidEmail`, `isValidDateFormat` (YYYY-MM-DD / DD-MM-YYYY / MM-DD-YYYY), `isValidWeeklyStartDay` (monday/sunday), `isValidHourlyRate` (≥0 or null), `isValidPassword` (min 8), `hashPassword`/`verifyPassword` (SHA-256 via `lib/crypto`)
+- **Endpoints:** `GET /api/v1/users/me` (401 without a resolved header user, 404 unknown, `passwordHash` stripped), `PATCH /api/v1/users/me` (only-present-fields merged, field-level 400s, duplicate email 409), `POST /api/v1/users/me/password` (first set allowed without current; thereafter requires correct current password — 401; new password min 8)
+- **Redaction:** `stripPasswordHash` helper sanitizes nested `user` relations in team-members (list + by-id) and time-entries lists; admin users list strips it too
+- **Frontend:** `api.users.me/updateMe/changePassword`, `useProfile.ts` hooks (`useMe`, `useUpdateMe`, `useChangePassword`); `routes/profile.tsx` fully bound — header card with real avatar initials + member-since, personal info (Full Name + hourly rate, Email/Role disabled per design), preferences (timezone datalist, date format, weekly start day), password change with client-side confirm-match + min-length validation, disabled two-factor toggle placeholder
+- **Tests:** `profile.test.ts` (email/format/day/rate/password validators, hash determinism + verify), `profile.integration.test.ts` (11: GET defaults + no hash leak, 401 no header/unknown, PATCH merge + persistence, hourlyRate null clear, field validation 400s, duplicate email 409, password first-set → wrong-current 401 → rotate ok, short/missing 400, stored hash not plaintext, users-list + team-members redaction); frontend `profile.integration.test.tsx` (6: renders with email/role disabled, personal info PATCH, preferences PATCH, mismatched confirm rejected without API call, password POST + form clear, 2FA toggle disabled)
+- **Live smoke:** GET me 200, PATCH round-trip, password set `{ok:true}`, 401 no header, 400 bad dateFormat, users list contains no `passwordHash`
+- **Commit:** `feat(profile): personal info + preferences persistence`
 
 ## Completed Features
 

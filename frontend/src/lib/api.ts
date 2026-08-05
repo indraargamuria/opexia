@@ -156,6 +156,20 @@ export interface ErpConfig {
   updatedAt?: string
 }
 
+export interface ProfileUser {
+  id: string
+  email: string
+  name: string
+  avatarUrl: string | null
+  role: string
+  hourlyRate: number | null
+  timezone: string
+  dateFormat: string
+  weeklyStartDay: string
+  createdAt?: string
+  updatedAt?: string
+}
+
 export const api = {
   clients: {
     list: () => request<unknown[]>('/api/v1/clients'),
@@ -177,6 +191,11 @@ export const api = {
   },
   users: {
     list: () => request<unknown[]>('/api/v1/users'),
+    me: () => request<ProfileUser>('/api/v1/users/me'),
+    updateMe: (data: Partial<Pick<ProfileUser, 'name' | 'email' | 'hourlyRate' | 'timezone' | 'dateFormat' | 'weeklyStartDay'>>) =>
+      request<ProfileUser>('/api/v1/users/me', { method: 'PATCH', body: JSON.stringify(data) }),
+    changePassword: (data: { currentPassword: string; newPassword: string }) =>
+      request<{ ok: boolean }>('/api/v1/users/me/password', { method: 'POST', body: JSON.stringify(data) }),
   },
   teamMembers: {
     list: () => request<unknown[]>('/api/v1/team-members'),

@@ -246,11 +246,12 @@ Based on the **Settings** and **Profile** pages (currently static forms).
 - **Commit:** `feat(settings): workspace + approval policy + erp config`
 - **Status:** done **2026-08-05**
 
-#### Task 5.2 — Profile persistence 🟪
+#### Task 5.2 — Profile persistence ✅
 - **Backend:** `GET/PATCH /api/v1/users/me` (name, email, hourly rate, timezone, date format, weekly start day), password change endpoint.
 - **Frontend:** bind Profile forms; disable email/role fields per design; two-factor toggle placeholder.
 - **Unit:** PATCH merge semantics, rate/timezone validation. **Type check:** both. **Integration:** update profile → `users/me` reflects change → re-login keeps it.
 - **Commit:** `feat(profile): personal info + preferences persistence`
+- **Status:** done **2026-08-05**
 
 ---
 
