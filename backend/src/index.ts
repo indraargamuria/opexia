@@ -25,9 +25,10 @@ const app = new Hono<AppEnv>()
 
 app.use('*', logger())
 app.use('*', cors({
-  origin: ['http://localhost:5173', 'http://localhost:3000'],
+  origin: ['http://localhost:5700', 'http://127.0.0.1:5700'],
   allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowHeaders: ['Content-Type', 'Authorization'],
+  allowHeaders: ['Content-Type', 'Authorization', 'X-User-Id'],
+  exposeHeaders: ['Content-Disposition', 'Content-Type', 'Content-Length'],
   credentials: true,
 }))
 
