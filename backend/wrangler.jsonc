@@ -25,7 +25,8 @@
 		{
 			"binding": "opexai_db",
 			"database_name": "opexai-db",
-			"database_id": "173e04bd-2d4c-471d-bd85-10b333586b1c"
+			"database_id": "173e04bd-2d4c-471d-bd85-10b333586b1c",
+			"migrations_dir": "drizzle/migrations"
 		}
 	],
 	// "ai": {
