@@ -11,6 +11,22 @@ import { isValidTeamRole } from './lib/teamMembers'
 import { isValidHexColor } from './lib/tags'
 import { buildEntryFilters, isFinalized, isWithinEditWindow, reviewBlockReason } from './lib/timeEntries'
 import { isOverdue, isUnderMinDuration, maxDurationMinutes } from './lib/timer'
+import {
+  isValidSlug,
+  isValidCurrency,
+  isValidTimezone,
+  isValidApprovalLevel,
+  isValidExportFormat,
+  isValidManualEntryWindowDays,
+  isValidMaxTimerHours,
+} from './lib/settings'
+import {
+  getWorkspaceSettings,
+  getApprovalPolicy,
+  getErpConfig,
+  getPolicyMaxTimerHours,
+  SETTINGS_SINGLETON_ID,
+} from './lib/settingsStore'
 import { weekBounds, utilizationPercent, roundedHours, reportWindow, weeksInWindow, aggregateEntries, costForMinutes, roundMoney, budgetReport, teamUtilizationPercent, WEEKLY_TARGET_HOURS } from './lib/reports'
 import { toExportRow, writeXlsxBuffer, createCsvStream } from './lib/exportRows'
 import { userRoles, isUserRole, canApprove, canViewAuditLogs, canViewTeamReports, isGlobalAdmin } from './lib/rbac'
@@ -709,6 +725,119 @@ app.get('/api/v1/audit-logs', requireRole(...AUDIT_ROLES), async (c) => {
   return c.json(rows)
 })
 
+// ─── Settings ───────────────────────────────────────────────────────────────
+
+app.get('/api/v1/workspace', async (c) => {
+  const d = db(c)
+  return c.json(await getWorkspaceSettings(d))
+})
+
+app.patch('/api/v1/workspace', requireRole(...ADMIN_ROLES), async (c) => {
+  const d = db(c)
+  const body = await c.req.json()
+  if (body.name !== undefined && (typeof body.name !== 'string' || body.name.trim().length === 0)) {
+    return c.json({ error: 'name must be a non-empty string' }, 400)
+  }
+  if (body.slug !== undefined && !isValidSlug(body.slug)) {
+    return c.json({ error: 'slug must be 2-50 chars of lowercase letters, digits, and hyphens' }, 400)
+  }
+  if (body.currency !== undefined && !isValidCurrency(body.currency)) {
+    return c.json({ error: `currency must be one of USD, EUR, GBP, CAD` }, 400)
+  }
+  if (body.timezone !== undefined && !isValidTimezone(body.timezone)) {
+    return c.json({ error: 'timezone must be a valid IANA timezone' }, 400)
+  }
+  const patch: Record<string, unknown> = {}
+  if (body.name !== undefined) patch.name = body.name.trim()
+  if (body.slug !== undefined) patch.slug = body.slug
+  if (body.currency !== undefined) patch.currency = body.currency
+  if (body.timezone !== undefined) patch.timezone = body.timezone
+  await getWorkspaceSettings(d)
+  const [row] = await d.update(schema.workspaceSettings)
+    .set({ ...patch, updatedAt: new Date() })
+    .where(eq(schema.workspaceSettings.id, SETTINGS_SINGLETON_ID))
+    .returning()
+  return c.json(row)
+})
+
+app.get('/api/v1/approval-policy', async (c) => {
+  const d = db(c)
+  return c.json(await getApprovalPolicy(d))
+})
+
+app.patch('/api/v1/approval-policy', requireRole(...ADMIN_ROLES), async (c) => {
+  const d = db(c)
+  const body = await c.req.json()
+  if (body.approvalLevel !== undefined && !isValidApprovalLevel(body.approvalLevel)) {
+    return c.json({ error: 'approvalLevel must be one of all, billable, manual, disabled' }, 400)
+  }
+  if (body.manualEntryWindowDays !== undefined && !isValidManualEntryWindowDays(body.manualEntryWindowDays)) {
+    return c.json({ error: 'manualEntryWindowDays must be an integer between 0 and 90' }, 400)
+  }
+  if (body.maxTimerHours !== undefined && !isValidMaxTimerHours(body.maxTimerHours)) {
+    return c.json({ error: 'maxTimerHours must be an integer between 1 and 24' }, 400)
+  }
+  const patch: Record<string, unknown> = {}
+  if (body.approvalLevel !== undefined) patch.approvalLevel = body.approvalLevel
+  if (body.manualEntryWindowDays !== undefined) patch.manualEntryWindowDays = body.manualEntryWindowDays
+  if (body.maxTimerHours !== undefined) patch.maxTimerHours = body.maxTimerHours
+  await getApprovalPolicy(d)
+  const [row] = await d.update(schema.approvalPolicy)
+    .set({ ...patch, updatedAt: new Date() })
+    .where(eq(schema.approvalPolicy.id, SETTINGS_SINGLETON_ID))
+    .returning()
+  return c.json(row)
+})
+
+app.get('/api/v1/erp-config', async (c) => {
+  const d = db(c)
+  return c.json(await getErpConfig(d))
+})
+
+app.patch('/api/v1/erp-config', requireRole(...ADMIN_ROLES), async (c) => {
+  const d = db(c)
+  const body = await c.req.json()
+  if (body.exportFormat !== undefined && !isValidExportFormat(body.exportFormat)) {
+    return c.json({ error: 'exportFormat must be one of sap, oracle, workday, custom' }, 400)
+  }
+  if (body.costCenterMappingEnabled !== undefined && typeof body.costCenterMappingEnabled !== 'boolean') {
+    return c.json({ error: 'costCenterMappingEnabled must be a boolean' }, 400)
+  }
+  const patch: Record<string, unknown> = {}
+  if (body.exportFormat !== undefined) patch.exportFormat = body.exportFormat
+  if (body.costCenterMappingEnabled !== undefined) patch.costCenterMappingEnabled = body.costCenterMappingEnabled
+  await getErpConfig(d)
+  const [row] = await d.update(schema.erpConfig)
+    .set({ ...patch, updatedAt: new Date() })
+    .where(eq(schema.erpConfig.id, SETTINGS_SINGLETON_ID))
+    .returning()
+  return c.json(row)
+})
+
+app.delete('/api/v1/workspace', requireRole(...ADMIN_ROLES), async (c) => {
+  const d = db(c)
+  const tables = [
+    schema.timeEntryTags,
+    schema.timeEntries,
+    schema.teamMembers,
+    schema.auditLogs,
+    schema.projects,
+    schema.clients,
+    schema.tags,
+    schema.users,
+    schema.workspaceSettings,
+    schema.approvalPolicy,
+    schema.erpConfig,
+  ]
+  for (const table of tables) {
+    await d.delete(table)
+  }
+  await getWorkspaceSettings(d)
+  await getApprovalPolicy(d)
+  await getErpConfig(d)
+  return c.json({ ok: true })
+})
+
 // ─── Reports ────────────────────────────────────────────────────────────────
 
 app.get('/api/v1/reports/me', async (c) => {
@@ -1106,12 +1235,13 @@ async function findRunningTimer(d: any, userId: string) {
 async function autoStopOverdueTimer(d: any, userId: string, now: Date = new Date()) {
   const running = await findRunningTimer(d, userId)
   if (!running) return null
-  if (!isOverdue(running.startedAt, now)) return running
+  const maxTimerHours = await getPolicyMaxTimerHours(d)
+  if (!isOverdue(running.startedAt, now, maxTimerHours)) return running
   const cs = await checksum(`${running.id}${now.getTime()}`)
   await d.update(schema.timeEntries)
     .set({
       endedAt: now,
-      durationMinutes: maxDurationMinutes(),
+      durationMinutes: maxDurationMinutes(maxTimerHours),
       status: 'pending',
       checksum: cs,
       updatedAt: now,

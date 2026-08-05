@@ -223,6 +223,54 @@ export const auditLogs = sqliteTable(
   ],
 );
 
+// ─── Settings (singleton rows) ──────────────────────────────────────────────
+
+export const workspaceSettings = sqliteTable(
+  'workspace_settings',
+  {
+    id: text('id').primaryKey(),
+    name: text('name').notNull().default('Opexia Consulting'),
+    slug: text('slug').notNull().default('opexia-consulting'),
+    currency: text('currency').notNull().default('USD'),
+    timezone: text('timezone').notNull().default('UTC'),
+    ...timestamps,
+  },
+  (t) => [
+    index('idx_workspace_settings_slug').on(t.slug),
+  ],
+);
+
+export const approvalPolicy = sqliteTable(
+  'approval_policy',
+  {
+    id: text('id').primaryKey(),
+    approvalLevel: text('approval_level', {
+      enum: ['all', 'billable', 'manual', 'disabled'],
+    })
+      .notNull()
+      .default('all'),
+    manualEntryWindowDays: integer('manual_entry_window_days').notNull().default(7),
+    maxTimerHours: integer('max_timer_hours').notNull().default(12),
+    ...timestamps,
+  },
+);
+
+export const erpConfig = sqliteTable(
+  'erp_config',
+  {
+    id: text('id').primaryKey(),
+    exportFormat: text('export_format', {
+      enum: ['sap', 'oracle', 'workday', 'custom'],
+    })
+      .notNull()
+      .default('sap'),
+    costCenterMappingEnabled: integer('cost_center_mapping_enabled', { mode: 'boolean' })
+      .notNull()
+      .default(true),
+    ...timestamps,
+  },
+);
+
 // ─── Relations ──────────────────────────────────────────────────────────────
 
 export const usersRelations = relations(users, ({ many }) => ({

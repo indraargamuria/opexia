@@ -1,7 +1,7 @@
 # PROGRESS.md — Opexia Project Tracker
 
 **Last Updated:** 2026-08-05
-**Current Phase:** Phase 4: Reports & Export
+**Current Phase:** Phase 5: Settings & Profile
 
 ---
 
@@ -169,6 +169,24 @@
 - **Tests:** `exportRows.test.ts` createCsvStream round-trip (bytes equal `buildExportCsv`); `reports-export.integration.test.ts` streams a CSV that parses back exactly to the seeded entries via a test-local RFC 4180 parser (embedded quote+comma description round-trips), BOM present in raw bytes
 - **Frontend:** Export CSV button already wired in 4.3 (`downloadReport('csv', params)`)
 - **Live smoke:** streaming CSV 200 with BOM in raw bytes
+
+## Phase 5 — Settings & Profile
+
+| Task | Status |
+|------|--------|
+| 5.1 Workspace settings persistence (workspace, approval policy, ERP) | Complete |
+| 5.2 Profile persistence (personal info + preferences) | Pending |
+
+### 5.1 Workspace Settings Persistence
+- **Backend:** three singleton tables (`workspace_settings`, `approval_policy`, `erp_config`, all `id = 'singleton'`) seeded by migration `0004_add_settings_tables.sql` via `INSERT OR IGNORE`
+- **lib/settings.ts:** validators `isValidSlug` (kebab-case 2–50), `isValidCurrency` (USD/EUR/GBP/CAD), `isValidTimezone` (IANA via `Intl.DateTimeFormat`), `isValidApprovalLevel`, `isValidExportFormat`, `isValidManualEntryWindowDays` (int 0–90), `isValidMaxTimerHours` (int 1–24)
+- **lib/settingsStore.ts:** `getWorkspaceSettings`/`getApprovalPolicy`/`getErpConfig` (find-or-insert singletons), `getPolicyMaxTimerHours`
+- **Endpoints:** `GET/PATCH /api/v1/workspace`, `GET/PATCH /api/v1/approval-policy`, `GET/PATCH /api/v1/erp-config` (PATCHes guarded `ADMIN_ROLES`, field-level 400s, only-present-fields merged); `DELETE /api/v1/workspace` Danger Zone — sequential wipe of timeEntryTags→timeEntries→teamMembers→auditLogs→projects→clients→tags→users→settings, then reseeds singletons, returns `{ok:true}`
+- **Timer policy wiring:** `autoStopOverdueTimer` now loads `getPolicyMaxTimerHours(d)` — patching `maxTimerHours` changes the auto-stop cap (integration-tested: 15h-old running entry survives a 24h cap, auto-stops to 60min under a 1h cap; untouched defaults to 720min)
+- **Frontend:** `api.settings.*` typed methods; `useSettings.ts` hooks (`useWorkspaceSettings`, `useUpdateWorkspaceSettings`, `useApprovalPolicy`, `useUpdateApprovalPolicy`, `useErpConfig`, `useUpdateErpConfig`, `useWipeWorkspace`); `routes/settings.tsx` fully bound — dirty-guarded form sync (edits never clobbered by refetch), per-section save states + server-error banners, labeled form controls, timezone datalist, Danger Zone requires typing the workspace slug before DELETE, wipes then navigates to `/login`
+- **Tests:** `settings.test.ts` (validators), `settings.integration.test.ts` (GET defaults, PATCH round-trips + validation 400s, worker 403, Danger Zone wipe, policy→timer integration); frontend `settings.integration.test.tsx` (4: renders persisted values, workspace PATCH + Saved indicator, approval/erp PATCHes, typed-confirmation delete)
+- **Live smoke:** GET singletons 200, PATCH round-trip + 400 invalid slug, worker 403, dev servers on 3700/5700
+- **Commit:** `feat(settings): workspace + approval policy + erp config`
 
 ## Completed Features
 

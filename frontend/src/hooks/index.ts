@@ -6,3 +6,12 @@ export { useTimeEntries, useCreateTimeEntry, useUpdateTimeEntry } from './useTim
 export { useApproveTimeEntry, useRejectTimeEntry, useApproveTimeEntries } from './useApprovals'
 export { useReportsMe, useClientReport, useTeamReport, useReportsOverview } from './useReports'
 export { useActiveTimer, useStartTimer, useStopTimer } from './useTimer'
+export {
+  useWorkspaceSettings,
+  useUpdateWorkspaceSettings,
+  useApprovalPolicy,
+  useUpdateApprovalPolicy,
+  useErpConfig,
+  useUpdateErpConfig,
+  useWipeWorkspace,
+} from './useSettings'

@@ -29,6 +29,13 @@
       "when": 1785903638889,
       "tag": "0003_add_report_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1785913413252,
+      "tag": "0004_add_settings_tables",
+      "breakpoints": true
     }
   ]
 }

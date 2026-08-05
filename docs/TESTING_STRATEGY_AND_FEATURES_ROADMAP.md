@@ -239,11 +239,12 @@ Based on the **Reports** page.
 
 Based on the **Settings** and **Profile** pages (currently static forms).
 
-#### Task 5.1 — Workspace settings persistence 🟪
+#### Task 5.1 — Workspace settings persistence ✅
 - **Backend:** `GET/PATCH /api/v1/workspace` (name, slug, currency, timezone), `GET/PATCH /api/v1/approval-policy` (approval level, manual entry window, max timer duration), `GET/PATCH /api/v1/erp-config` (export format, cost-center mapping).
 - **Frontend:** bind Settings forms to API with save states and validation; Danger Zone delete confirmed via typed confirmation.
 - **Unit:** slug/currency/timezone validators, policy constraint checks (e.g. max duration ≤ 24h). **Type check:** both. **Integration:** patch policy → timer uses new max duration.
 - **Commit:** `feat(settings): workspace + approval policy + erp config`
+- **Status:** done **2026-08-05**
 
 #### Task 5.2 — Profile persistence 🟪
 - **Backend:** `GET/PATCH /api/v1/users/me` (name, email, hourly rate, timezone, date format, weekly start day), password change endpoint.

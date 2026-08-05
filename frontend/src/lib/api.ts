@@ -126,6 +126,36 @@ export interface TeamReport {
   teamTotals: { minutes: number; hours: number; activeWorkerCount: number; averageUtilizationPercent: number }
 }
 
+export type ApprovalLevel = 'all' | 'billable' | 'manual' | 'disabled'
+export type ExportFormat = 'sap' | 'oracle' | 'workday' | 'custom'
+
+export interface WorkspaceSettings {
+  id: string
+  name: string
+  slug: string
+  currency: string
+  timezone: string
+  createdAt?: string
+  updatedAt?: string
+}
+
+export interface ApprovalPolicy {
+  id: string
+  approvalLevel: ApprovalLevel
+  manualEntryWindowDays: number
+  maxTimerHours: number
+  createdAt?: string
+  updatedAt?: string
+}
+
+export interface ErpConfig {
+  id: string
+  exportFormat: ExportFormat
+  costCenterMappingEnabled: boolean
+  createdAt?: string
+  updatedAt?: string
+}
+
 export const api = {
   clients: {
     list: () => request<unknown[]>('/api/v1/clients'),
@@ -197,5 +227,17 @@ export const api = {
       request<ClientReport>(`/api/v1/reports/client/${id}${buildQueryString(params ?? {})}`),
     team: (params?: PeriodParams) =>
       request<TeamReport>(`/api/v1/reports/team${buildQueryString(params ?? {})}`),
+  },
+  settings: {
+    workspace: () => request<WorkspaceSettings>('/api/v1/workspace'),
+    updateWorkspace: (data: Partial<Pick<WorkspaceSettings, 'name' | 'slug' | 'currency' | 'timezone'>>) =>
+      request<WorkspaceSettings>('/api/v1/workspace', { method: 'PATCH', body: JSON.stringify(data) }),
+    approvalPolicy: () => request<ApprovalPolicy>('/api/v1/approval-policy'),
+    updateApprovalPolicy: (data: Partial<Pick<ApprovalPolicy, 'approvalLevel' | 'manualEntryWindowDays' | 'maxTimerHours'>>) =>
+      request<ApprovalPolicy>('/api/v1/approval-policy', { method: 'PATCH', body: JSON.stringify(data) }),
+    erpConfig: () => request<ErpConfig>('/api/v1/erp-config'),
+    updateErpConfig: (data: Partial<Pick<ErpConfig, 'exportFormat' | 'costCenterMappingEnabled'>>) =>
+      request<ErpConfig>('/api/v1/erp-config', { method: 'PATCH', body: JSON.stringify(data) }),
+    wipe: () => request<{ ok: boolean }>('/api/v1/workspace', { method: 'DELETE' }),
   },
 }
