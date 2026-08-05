@@ -105,11 +105,11 @@ Legend: 🟦 Backend · 🟩 Frontend · 🟪 Both
 
 Sets up the gates so every later task is automatically verifiable and self-shipping.
 
-#### Task 0.1 — Frontend test infrastructure 🟩
+#### Task 0.1 — Frontend test infrastructure 🟩 ✅
 - Add `vitest`, `@testing-library/react`, `@testing-library/user-event`, `@testing-library/jest-dom`, `jsdom` to `frontend/`.
 - Add `vitest.config.ts` (jsdom env, `@` alias) and a sample unit test for `lib/utils.ts` (`cn`, `formatDuration`, `formatMinutes`).
 - **Unit:** formatter/`cn` edge cases. **Type check:** `tsc -b`. **Integration:** N/A (infra only).
-- **Commit:** `test(frontend): add vitest + testing-library setup`
+- **Commit:** `test(frontend): add vitest + testing-library setup` — **done 2026-08-05**
 
 #### Task 0.2 — Backend test infrastructure 🟦
 - Add `vitest` to `backend/`. Create `backend/test/helpers.ts` (`createTestDb`, `seedFixtures`, `makeRequest`) using `better-sqlite3` + `drizzle-orm/better-sqlite3` with `drizzle-kit` migration applied in-memory.

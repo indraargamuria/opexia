@@ -1,7 +1,24 @@
 # PROGRESS.md — Opexia Project Tracker
 
-**Last Updated:** 2026-07-22
-**Current Phase:** Phase 2: Backend Integration & Hono RPC Setup
+**Last Updated:** 2026-08-05
+**Current Phase:** Phase 0–1: Test Infrastructure & Master Data Management
+
+---
+
+## Phase 0 — Test Infrastructure & Delivery Automation
+
+| Task | Status |
+|------|--------|
+| 0.1 Frontend test infrastructure (Vitest + Testing Library) | Complete |
+| 0.2 Backend test infrastructure (Vitest + in-memory D1 shim) | Pending |
+| 0.3 Type check gates (frontend + backend) | Pending |
+| 0.4 Auto commit & push automation | Pending |
+
+### 0.1 Frontend Test Infrastructure
+- Added dev deps: `vitest`, `@testing-library/react`, `@testing-library/user-event`, `@testing-library/jest-dom`, `jsdom`
+- `vitest.config.ts`: jsdom environment, `@` alias, `src/test/setup.ts`
+- `src/lib/utils.test.ts`: unit tests for `cn()`, `formatDuration()`, `formatMinutes()` (5 tests)
+- Scripts: `npm run test`, `npm run test:watch`, `npm run typecheck`
 
 ---
 
