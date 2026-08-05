@@ -200,10 +200,10 @@ Based on the PRD approval flow and Dashboard status badges.
 - **Unit:** permission matrix (PRD §2.3), role resolution. **Type check:** both. **Integration:** viewer denied approve → 403; admin allowed audit logs.
 - **Commit:** `feat(rbac): role-based route guards backend + frontend` — **done 2026-08-05**
 
-#### Task 3.3 — Route guards & conditional UI 🟪
+#### Task 3.3 — Route guards & conditional UI 🟪 ✅
 - **Frontend:** TanStack Router guards — workers cannot open admin-only pages; sidebar hides Reports/Team/Tags for workers; login redirect for unauthenticated.
 - **Unit:** guard hook matrix, redirect behavior. **Type check:** both. **Integration:** logged-out → `/` redirects to `/login`; worker blocked from `/settings`.
-- **Commit:** `feat(rbac): route guards and conditional navigation`
+- **Commit:** `feat(rbac): route guards and conditional navigation` — **done 2026-08-05**
 
 ---
 

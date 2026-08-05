@@ -2,8 +2,10 @@ import { useState, type FormEvent } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import { useTags, useCreateTag, useUpdateTag, useDeleteTag } from '@/hooks'
 import { isValidHexColor } from '@/lib/color'
+import { routeGuard } from '@/lib/routeGuard'
 
 export const Route = createFileRoute('/tags')({
+  beforeLoad: routeGuard('/tags'),
   component: Tags,
 })
 

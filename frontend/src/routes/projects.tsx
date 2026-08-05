@@ -3,8 +3,10 @@ import { createFileRoute } from '@tanstack/react-router'
 import { useProjects, useCreateProject, useUpdateProject, useDeleteProject, useClients, useCreateClient, useUpdateClient, useDeleteClient } from '@/hooks'
 import { isValidClientCode } from '@/lib/validation'
 import { budgetPercentage, budgetLevel } from '@/lib/budget'
+import { routeGuard } from '@/lib/routeGuard'
 
 export const Route = createFileRoute('/projects')({
+  beforeLoad: routeGuard('/projects'),
   component: Projects,
 })
 

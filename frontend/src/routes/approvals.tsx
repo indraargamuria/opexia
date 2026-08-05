@@ -7,8 +7,10 @@ import {
   useRejectTimeEntry,
   useApproveTimeEntries,
 } from '@/hooks'
+import { routeGuard } from '@/lib/routeGuard'
 
 export const Route = createFileRoute('/approvals')({
+  beforeLoad: routeGuard('/approvals'),
   component: Approvals,
 })
 

@@ -1,8 +1,10 @@
 import { useState, type FormEvent } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import { useTeamMembers, useAssignTeamMember, useUpdateTeamMember, useRemoveTeamMember, useUsers, useProjects } from '@/hooks'
+import { routeGuard } from '@/lib/routeGuard'
 
 export const Route = createFileRoute('/team')({
+  beforeLoad: routeGuard('/team'),
   component: Team,
 })
 

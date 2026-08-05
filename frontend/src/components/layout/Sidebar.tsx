@@ -8,22 +8,41 @@ import {
   ClipboardCheck,
   Settings,
 } from 'lucide-react'
+import { getSession } from '@/lib/session'
+import { hasPermission, type Permission } from '@/lib/rbac'
+import type { LucideIcon } from 'lucide-react'
 
-const navItems = [
+interface NavItem {
+  to: string
+  label: string
+  icon: LucideIcon
+  permission?: Permission
+}
+
+const navItems: NavItem[] = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/projects', label: 'Projects', icon: FolderKanban },
-  { to: '/team', label: 'Team', icon: Users },
-  { to: '/approvals', label: 'Approvals', icon: ClipboardCheck },
-  { to: '/reports', label: 'Reports', icon: BarChart3 },
-  { to: '/tags', label: 'Tags', icon: Tags },
+  { to: '/team', label: 'Team', icon: Users, permission: 'reports:team' },
+  { to: '/approvals', label: 'Approvals', icon: ClipboardCheck, permission: 'time:approve' },
+  { to: '/reports', label: 'Reports', icon: BarChart3, permission: 'reports:team' },
+  { to: '/tags', label: 'Tags', icon: Tags, permission: 'admin:manage' },
 ]
 
-const bottomItems = [
-  { to: '/settings', label: 'Settings', icon: Settings },
+const bottomItems: NavItem[] = [
+  { to: '/settings', label: 'Settings', icon: Settings, permission: 'admin:manage' },
 ]
+
+const ROLE_LABELS: Record<string, string> = {
+  worker: 'Worker',
+  manager: 'Manager',
+  admin: 'Admin',
+  viewer: 'Viewer',
+}
 
 export function Sidebar() {
   const location = useLocation()
+  const session = getSession()
+  const allowed = (item: NavItem) => !item.permission || hasPermission(session.role, item.permission)
 
   return (
     <aside className="fixed left-0 top-0 z-30 h-screen w-64 bg-dark-accent px-3 py-4 flex flex-col">
@@ -32,7 +51,7 @@ export function Sidebar() {
       </div>
 
       <nav className="flex-1 space-y-1">
-        {navItems.map((item) => {
+        {navItems.filter(allowed).map((item) => {
           const isActive = item.to === '/'
             ? location.pathname === '/'
             : location.pathname.startsWith(item.to)
@@ -54,7 +73,7 @@ export function Sidebar() {
       </nav>
 
       <div className="space-y-1">
-        {bottomItems.map((item) => {
+        {bottomItems.filter(allowed).map((item) => {
           const isActive = location.pathname.startsWith(item.to)
           return (
             <Link
@@ -78,7 +97,7 @@ export function Sidebar() {
           </div>
           <div className="text-sm">
             <p className="text-white font-medium">Jane Doe</p>
-            <p className="text-white/50 text-xs">Manager</p>
+            <p className="text-white/50 text-xs">{ROLE_LABELS[session.role] ?? session.role}</p>
           </div>
         </div>
       </div>

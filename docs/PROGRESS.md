@@ -107,7 +107,7 @@
 |------|--------|
 | 3.1 Approve / reject endpoints | Complete |
 | 3.2 RBAC middleware | Complete |
-| 3.3 Route guards & conditional UI | Pending |
+| 3.3 Route guards & conditional UI | Complete |
 
 ### 3.1 Approve / Reject Endpoints
 - **Backend:** `src/lib/timeEntries.ts` — `reviewBlockReason` (pending only; running → "stop the timer", approved/invoiced → finalized, rejected → must resubmit); `POST /api/v1/time-entries/:id/approve` (records `approvedBy`/`approvedAt`, recomputes checksum), `POST /api/v1/time-entries/:id/reject` (requires non-empty `rejectionReason`, records reviewer), `POST /api/v1/time-entries/approve-batch` (approves all pending ids, returns `{ approved, skipped }` with per-id reasons; 400 empty/actor missing, 404 unknown id); PATCH now exempts `rejected` entries from the edit-window check and resubmits them to `pending`, clearing `rejectionReason`
@@ -121,6 +121,12 @@
 - `writeAudit` helper inserts into `audit_logs` (entityType/entityId/action/actorId/payload/checksum); wired into approve, reject, and batch-approve (per approved entry); `GET /api/v1/audit-logs` (admin only, ordered desc, with actor relation)
 - **Frontend:** `lib/session.ts` (stub session `DEMO_USER_ID`/`DEMO_ROLE=admin` until Phase 6 auth), `lib/rbac.ts` (permission matrix mirroring backend, `hasPermission`/`hasAnyRole`/`isRole`); `lib/api.ts` request now sends `X-User-Id` so backend RBAC resolves a real caller
 - **Tests:** `test/rbac.test.ts` (unit: role enum, PRD §2.3 permission matrix per role, `projectRole` fallback/membership-wins), `test/rbac.integration.test.ts` (9: stub-admin no-header, viewer approve 403, manager approve 200, worker master-data 403, admin users/master-data 200, unknown-header fallback, audit-logs admin 200 + manager/viewer 403, approve writes audit row, team_members role stored); frontend `session.test.ts` + `rbac.test.ts`
+
+### 3.3 Route Guards & Conditional UI
+- **Frontend:** `lib/routeGuard.ts` — `ROUTE_PERMISSIONS` map (team/reports → `reports:team`, approvals → `time:approve`, tags/settings → `admin:manage`), pure `evaluateRouteAccess(pathname, { authenticated, role })` returning `/login` (unauthenticated) or `/` (insufficient role), and `routeGuard(pathname)` returning the TanStack Router `beforeLoad` handler
+- Every protected route (`/`, `/projects`, `/profile`, `/team`, `/approvals`, `/reports`, `/tags`, `/settings`) now has `beforeLoad: routeGuard(...)`; `/login` stays public; `session.ts` adds `isAuthenticated` (localStorage `opexia_token`) + `clearSession`
+- **Sidebar:** nav items carry an optional `permission` and are filtered per session role — workers see only Dashboard/Projects (Team, Approvals, Reports, Tags, Settings hidden); role label under the profile chip renders the session role
+- **Tests:** `routeGuard.test.ts` (unit: access matrix for all four roles, `/login` passthrough, auth persistence); `routeGuard.integration.test.tsx` (3, real router + memory history: logged-out `/` → `/login` renders login page, worker `/settings` → `/`, admin `/settings` stays)
 
 ## Completed Features
 

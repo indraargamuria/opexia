@@ -1,8 +1,10 @@
 import { useState, type FormEvent } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import { useTimeEntries, useCreateTimeEntry, useUpdateTimeEntry, useProjects, useTags, useReportsMe } from '@/hooks'
+import { routeGuard } from '@/lib/routeGuard'
 
 export const Route = createFileRoute('/')({
+  beforeLoad: routeGuard('/'),
   component: Dashboard,
 })
 

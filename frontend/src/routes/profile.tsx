@@ -1,6 +1,8 @@
 import { createFileRoute } from '@tanstack/react-router'
+import { routeGuard } from '@/lib/routeGuard'
 
 export const Route = createFileRoute('/profile')({
+  beforeLoad: routeGuard('/profile'),
   component: Profile,
 })
 
