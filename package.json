@@ -1,0 +1,9 @@
+{
+  "name": "opexia",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test \"scripts/*.test.mjs\"",
+    "deliver": "node scripts/deliver.mjs"
+  }
+}

@@ -122,11 +122,11 @@ Sets up the gates so every later task is automatically verifiable and self-shipp
 - **Unit:** N/A. **Type check:** both packages clean. **Integration:** N/A.
 - **Commit:** `chore: add typecheck gates to frontend and backend` — **done 2026-08-05**
 
-#### Task 0.4 — Auto commit & push automation 🟪
+#### Task 0.4 — Auto commit & push automation 🟪 ✅
 - Add root `scripts/deliver.mjs` implementing the gate-then-commit-then-push flow from §1.5.
 - Add `npm run deliver -- --message "..."` at root.
 - **Unit:** unit-test the gate runner with a mocked shell (failing gate must abort). **Type check:** clean. **Integration:** dry-run that a green pipeline ends with a commit.
-- **Commit:** `ci: add gate-based auto commit & push pipeline`
+- **Commit:** `ci: add gate-based auto commit & push pipeline` — **done 2026-08-05**
 
 ---
 

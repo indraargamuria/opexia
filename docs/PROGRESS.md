@@ -12,7 +12,7 @@
 | 0.1 Frontend test infrastructure (Vitest + Testing Library) | Complete |
 | 0.2 Backend test infrastructure (Vitest + in-memory D1 shim) | Complete |
 | 0.3 Type check gates (frontend + backend) | Complete |
-| 0.4 Auto commit & push automation | Pending |
+| 0.4 Auto commit & push automation | Complete |
 
 ### 0.1 Frontend Test Infrastructure
 - Added dev deps: `vitest`, `@testing-library/react`, `@testing-library/user-event`, `@testing-library/jest-dom`, `jsdom`
@@ -32,6 +32,12 @@
 ### 0.3 Type Check Gates
 - Added `typecheck` script to both packages: frontend `tsc -b --noEmit`, backend `tsc --noEmit`
 - Both packages pass clean with zero errors; oxlint clean of errors (pre-existing fast-refresh warnings only)
+
+### 0.4 Auto Commit & Push Automation
+- `scripts/deliver.mjs`: gate-then-commit-then-push pipeline — runs frontend test+typecheck, backend test+typecheck, then `git add -A && git commit && git push`; aborts without committing on any gate failure
+- Message from `--message` flag or `COMMIT_MSG` env; Windows-aware (`npm.cmd`)
+- `scripts/deliver.test.mjs`: 7 unit tests (failing gate aborts, all-green flow, arg parsing, no-message guard)
+- Root `package.json` with `npm run deliver -- --message "..."` and `npm test`
 
 ---
 
