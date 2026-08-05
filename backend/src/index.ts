@@ -2,13 +2,14 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { logger } from 'hono/logger'
 import { drizzle } from 'drizzle-orm/d1'
-import { desc, eq, and, sql, asc } from 'drizzle-orm'
+import { desc, eq, and, sql, asc, gte, lte } from 'drizzle-orm'
 import * as schema from './db/schema'
 import { checksum } from './lib/crypto'
 import { isValidClientCode, isUniqueViolation } from './lib/validators'
 import { canTransition, isValidDateRange, budgetUtilization, creatableProjectStatuses } from './lib/projects'
 import { isValidTeamRole } from './lib/teamMembers'
 import { isValidHexColor } from './lib/tags'
+import { buildEntryFilters, isFinalized, isWithinEditWindow } from './lib/timeEntries'
 
 const app = new Hono<{ Bindings: { opexai_db: any } }>()
 
@@ -436,12 +437,26 @@ app.delete('/api/v1/tags/:id', async (c) => {
 
 app.get('/api/v1/time-entries', async (c) => {
   const d = db(c)
+  let filters
+  try {
+    filters = buildEntryFilters(c.req.query())
+  } catch (err) {
+    return c.json({ error: (err as Error).message }, 400)
+  }
+  const conditions = [
+    filters.dateFrom ? gte(schema.timeEntries.startedAt, filters.dateFrom) : undefined,
+    filters.dateTo ? lte(schema.timeEntries.startedAt, filters.dateTo) : undefined,
+    filters.projectId ? eq(schema.timeEntries.projectId, filters.projectId) : undefined,
+    filters.status ? eq(schema.timeEntries.status, filters.status) : undefined,
+    filters.userId ? eq(schema.timeEntries.userId, filters.userId) : undefined,
+  ].filter(Boolean)
   const rows = await d.query.timeEntries.findMany({
     with: {
       user: true,
       project: { with: { client: true } },
       timeEntryTags: { with: { tag: true } },
     },
+    where: conditions.length ? and(...conditions) : undefined,
     orderBy: [desc(schema.timeEntries.startedAt)],
   })
   return c.json(rows)
@@ -474,6 +489,51 @@ app.post('/api/v1/time-entries', async (c) => {
     )
   }
   return c.json(row, 201)
+})
+
+async function replaceEntryTags(d: any, timeEntryId: string, tagIds: string[]) {
+  await d.delete(schema.timeEntryTags).where(eq(schema.timeEntryTags.timeEntryId, timeEntryId))
+  if (tagIds.length) {
+    await d.insert(schema.timeEntryTags).values(
+      tagIds.map((tagId: string) => ({ timeEntryId, tagId }))
+    )
+  }
+}
+
+app.patch('/api/v1/time-entries/:id', async (c) => {
+  const d = db(c)
+  const id = c.req.param('id')
+  const body = await c.req.json()
+  const existing = await d.query.timeEntries.findFirst({ where: eq(schema.timeEntries.id, id) })
+  if (!existing) return c.json({ error: 'Time entry not found' }, 404)
+  if (existing.status === 'running') {
+    return c.json({ error: 'Stop the timer before editing this entry' }, 409)
+  }
+  if (isFinalized(existing.status)) {
+    return c.json({ error: 'Finalized entries (approved/invoiced) are immutable and cannot be edited' }, 409)
+  }
+  if (!isWithinEditWindow(existing)) {
+    return c.json({ error: 'Entry is outside the editable policy window and requires manager approval' }, 409)
+  }
+  if (body.projectId !== undefined && await projectIsArchived(d, body.projectId)) {
+    return c.json({ error: 'Project is archived and cannot accept time entries' }, 400)
+  }
+  const patch: Record<string, unknown> = {}
+  if (body.projectId !== undefined) patch.projectId = body.projectId
+  if (body.description !== undefined) patch.description = body.description
+  if (body.startedAt !== undefined) patch.startedAt = new Date(body.startedAt)
+  if (body.endedAt !== undefined) patch.endedAt = new Date(body.endedAt)
+  if (body.durationMinutes !== undefined) patch.durationMinutes = body.durationMinutes
+  const updatedAt = new Date()
+  const cs = await checksum(`${id}${updatedAt.getTime()}`)
+  const [row] = await d.update(schema.timeEntries)
+    .set({ ...patch, checksum: cs, updatedAt })
+    .where(eq(schema.timeEntries.id, id))
+    .returning()
+  if (Array.isArray(body.tagIds)) {
+    await replaceEntryTags(d, id, body.tagIds)
+  }
+  return c.json(row)
 })
 
 // ─── Timer ──────────────────────────────────────────────────────────────────

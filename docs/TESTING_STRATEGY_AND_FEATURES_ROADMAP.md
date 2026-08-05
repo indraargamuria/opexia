@@ -164,11 +164,11 @@ Based on the **Projects**, **Team**, and **Tags** pages. Completes the CRUD surf
 
 Based on the **Dashboard** page and the global **TimeTracker** component.
 
-#### Task 2.1 — Time entries CRUD & filtering 🟪
+#### Task 2.1 — Time entries CRUD & filtering 🟪 ✅
 - **Backend:** `PATCH /api/v1/time-entries/:id` (edit within policy window; 3-business-day rule requires manager approval), list filters (`dateFrom`, `dateTo`, `projectId`, `status`, `userId`), entry tagging on create/update, immutable `checksum` recompute guard on finalized entries.
 - **Frontend:** filter bar on Dashboard; edit action for own pending entries; tag multi-select in manual entry.
 - **Unit:** checksum immutability, policy-window rule, filter query building. **Type check:** both. **Integration:** create manual entry → patch within window → patch after window as worker rejected.
-- **Commit:** `feat(time-entries): edit, filters, tagging`
+- **Commit:** `feat(time-entries): edit, filters, tagging` — **done 2026-08-05**
 
 #### Task 2.2 — Timer hardening 🟪
 - **Backend:** enforce one running timer per user (exists — return 409), min duration 1 min (discard <1 min), max 12h auto-stop (24h admin override), timer start against archived project blocked.

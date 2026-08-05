@@ -1,3 +1,5 @@
+import { buildQueryString } from '@/lib/query'
+
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8787'
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -53,9 +55,12 @@ export const api = {
       request<unknown>(`/api/v1/tags/${id}`, { method: 'DELETE' }),
   },
   timeEntries: {
-    list: () => request<unknown[]>('/api/v1/time-entries'),
+    list: (params?: Record<string, string | undefined>) =>
+      request<unknown[]>(`/api/v1/time-entries${buildQueryString(params ?? {})}`),
     create: (data: Record<string, unknown>) =>
       request<unknown>('/api/v1/time-entries', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: string, data: Record<string, unknown>) =>
+      request<unknown>(`/api/v1/time-entries/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   },
   timer: {
     start: (data: { userId: string; projectId: string; description?: string }) =>

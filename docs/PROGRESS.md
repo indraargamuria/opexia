@@ -71,6 +71,22 @@
 ### 1.4 Tags Module Completion
 - **Backend:** `src/lib/tags.ts` — `isValidHexColor` validator; `category` column added to `tags` via generated migration `0001_add_tags_category.sql`; tags list/get include `usageCount` (junction aggregate); added `GET /:id`, `PATCH /:id` (name/color/category/erpCode, hex + unique-name validation, 404), `DELETE /:id` — blocks 409 when referenced by `invoiced` entries, otherwise deletes junction rows then the tag
 - **Frontend:** `lib/color.ts` + `api.tags.update/remove`, `useUpdateTag`/`useDeleteTag` hooks; Tags page "New Tag" modal (color/category/ERP), per-row Edit/Delete, Category badge + ERP code + Usage count columns, metrics wired to real data (Most Used by usageCount, Categories count)
+
+---
+
+## Phase 2 — Time Tracking
+
+| Task | Status |
+|------|--------|
+| 2.1 Time entries CRUD & filtering | Complete |
+| 2.2 Timer hardening | Pending |
+| 2.3 Dashboard aggregation | Pending |
+
+### 2.1 Time Entries CRUD & Filtering
+- **Backend:** `src/lib/timeEntries.ts` — `isTimeEntryStatus`/`isFinalized` enum helpers, `EDIT_POLICY_WINDOW_DAYS = 7`, `isWithinEditWindow` (worker self-edit policy), `buildEntryFilters` (validated `dateFrom`/`dateTo` mapped to start/end of day, `projectId`, `status`, `userId`)
+- **Backend routes:** GET `/api/v1/time-entries` now applies the filters (drizzle `gte`/`lte`/`eq`, 400 on invalid status/date); PATCH `/api/v1/time-entries/:id` — 404 unknown, 409 running (stop timer first), 409 finalized (approved/invoiced immutable), 409 outside edit window (requires manager approval), 400 archived project, recomputes SHA-256 `checksum` on save, replaces `tagIds` junction rows; tagging also supported on create (already existed)
+- **Frontend:** `lib/query.ts` (`buildQueryString`, unit tested), `api.timeEntries.list(params)`/`update`, `useTimeEntries(params)` (queryKey includes filters), `useUpdateTimeEntry`; Dashboard now has a working filter bar (date range, project, status, Clear), a functional "Add Manual Entry" modal (project/date/start time/duration/description/tags multi-select) reusing create, and an Edit action for pending entries reusing the same modal via update
+- **Tests:** `test/timeEntries.test.ts` (unit: status/finalized enums, edit window incl. custom window, filter building incl. throws), `test/time-entries.integration.test.ts` (11: tag on create, patch within window + checksum change, patch after window 409, patch finalized/running 409, tag replacement, date/project/status/user filters, invalid status 400), `query.test.ts` (frontend)
 - **Tests:** `test/tags.test.ts` (unit: hex validator), `test/tags.integration.test.ts` (8: usage counts, get by id, invalid color 400, duplicate 409, PATCH, delete cascades junction rows, delete blocked on invoiced, 404), `color.test.ts` (frontend)
 
 ---
