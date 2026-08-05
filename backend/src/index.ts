@@ -10,6 +10,7 @@ import { canTransition, isValidDateRange, budgetUtilization, creatableProjectSta
 import { isValidTeamRole } from './lib/teamMembers'
 import { isValidHexColor } from './lib/tags'
 import { buildEntryFilters, isFinalized, isWithinEditWindow } from './lib/timeEntries'
+import { isOverdue, isUnderMinDuration, maxDurationMinutes } from './lib/timer'
 
 const app = new Hono<{ Bindings: { opexai_db: any } }>()
 
@@ -538,6 +539,32 @@ app.patch('/api/v1/time-entries/:id', async (c) => {
 
 // ─── Timer ──────────────────────────────────────────────────────────────────
 
+async function findRunningTimer(d: any, userId: string) {
+  return d.query.timeEntries.findFirst({
+    where: and(
+      eq(schema.timeEntries.userId, userId),
+      eq(schema.timeEntries.status, 'running'),
+    ),
+  })
+}
+
+async function autoStopOverdueTimer(d: any, userId: string, now: Date = new Date()) {
+  const running = await findRunningTimer(d, userId)
+  if (!running) return null
+  if (!isOverdue(running.startedAt, now)) return running
+  const cs = await checksum(`${running.id}${now.getTime()}`)
+  await d.update(schema.timeEntries)
+    .set({
+      endedAt: now,
+      durationMinutes: maxDurationMinutes(),
+      status: 'pending',
+      checksum: cs,
+      updatedAt: now,
+    })
+    .where(eq(schema.timeEntries.id, running.id))
+  return null
+}
+
 app.post('/api/v1/timer/start', async (c) => {
   const d = db(c)
   const body = await c.req.json()
@@ -547,12 +574,8 @@ app.post('/api/v1/timer/start', async (c) => {
   if (await projectIsArchived(d, body.projectId)) {
     return c.json({ error: 'Project is archived and cannot accept time entries' }, 400)
   }
-  const existing = await d.query.timeEntries.findFirst({
-    where: and(
-      eq(schema.timeEntries.userId, body.userId),
-      eq(schema.timeEntries.status, 'running'),
-    ),
-  })
+  const now = new Date()
+  const existing = await autoStopOverdueTimer(d, body.userId, now)
   if (existing) {
     return c.json({ error: 'A timer is already running. Stop it first.', activeEntry: existing }, 409)
   }
@@ -561,7 +584,7 @@ app.post('/api/v1/timer/start', async (c) => {
     userId: body.userId,
     projectId: body.projectId,
     description: body.description,
-    startedAt: new Date(),
+    startedAt: now,
     status: 'running',
     entryMethod: 'timer',
     checksum: cs,
@@ -575,18 +598,16 @@ app.post('/api/v1/timer/stop', async (c) => {
   if (!body.userId) {
     return c.json({ error: 'userId is required' }, 400)
   }
-  const running = await d.query.timeEntries.findFirst({
-    where: and(
-      eq(schema.timeEntries.userId, body.userId),
-      eq(schema.timeEntries.status, 'running'),
-    ),
-  })
+  const now = new Date()
+  const running = await findRunningTimer(d, body.userId)
   if (!running) {
     return c.json({ error: 'No active timer found' }, 404)
   }
-  const now = new Date()
-  const durationMs = now.getTime() - running.startedAt.getTime()
-  const durationMinutes = Math.max(1, Math.round(durationMs / 60000))
+  if (isUnderMinDuration(running.startedAt, now)) {
+    await d.delete(schema.timeEntries).where(eq(schema.timeEntries.id, running.id))
+    return c.json({ ok: true, discarded: true, id: running.id })
+  }
+  const durationMinutes = Math.round((now.getTime() - running.startedAt.getTime()) / 60000)
   const cs = await checksum(`${running.id}${now.getTime()}`)
   const [updated] = await d.update(schema.timeEntries)
     .set({
@@ -607,17 +628,20 @@ app.get('/api/v1/timer/current', async (c) => {
   if (!userId) {
     return c.json({ error: 'userId query param is required' }, 400)
   }
-  const running = await d.query.timeEntries.findFirst({
-    where: and(
-      eq(schema.timeEntries.userId, userId),
-      eq(schema.timeEntries.status, 'running'),
-    ),
-    with: {
-      project: { with: { client: true } },
-      timeEntryTags: { with: { tag: true } },
-    },
+  await autoStopOverdueTimer(d, userId)
+  const running = await findRunningTimer(d, userId)
+  if (!running) return c.json(null)
+  return c.json({
+    ...running,
+    project: await d.query.projects.findFirst({
+      where: eq(schema.projects.id, running.projectId),
+      with: { client: true },
+    }),
+    timeEntryTags: await d.query.timeEntryTags.findMany({
+      where: eq(schema.timeEntryTags.timeEntryId, running.id),
+      with: { tag: true },
+    }),
   })
-  return c.json(running ?? null)
 })
 
 export type AppType = typeof app

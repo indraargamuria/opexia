@@ -13,10 +13,25 @@ export function TimeTracker() {
 
   const [selectedProject, setSelectedProject] = useState('')
   const [elapsed, setElapsed] = useState(0)
+  const [autoStopped, setAutoStopped] = useState(false)
+  const [actionError, setActionError] = useState<string | null>(null)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const wasRunningRef = useRef(false)
+  const stoppedManuallyRef = useRef(false)
 
   const isRunning = (activeTimer as any)?.status === 'running'
   const runningProjectId = (activeTimer as any)?.projectId
+
+  useEffect(() => {
+    if (wasRunningRef.current && !isRunning && !stoppedManuallyRef.current) {
+      setAutoStopped(true)
+    }
+    if (isRunning) {
+      setAutoStopped(false)
+      setActionError(null)
+    }
+    wasRunningRef.current = isRunning
+  }, [isRunning])
 
   useEffect(() => {
     if (isRunning && (activeTimer as any)?.startedAt) {
@@ -38,17 +53,34 @@ export function TimeTracker() {
 
   const handleStart = useCallback(() => {
     if (!selectedProject) return
-    startTimer.mutate({ userId: DEMO_USER_ID, projectId: selectedProject })
+    stoppedManuallyRef.current = false
+    setAutoStopped(false)
+    setActionError(null)
+    startTimer.mutate(
+      { userId: DEMO_USER_ID, projectId: selectedProject },
+      { onError: () => setActionError('Failed to start timer') },
+    )
   }, [selectedProject, startTimer])
 
   const handleStop = useCallback(() => {
-    stopTimer.mutate({ userId: DEMO_USER_ID })
+    stoppedManuallyRef.current = true
+    setActionError(null)
+    stopTimer.mutate(
+      { userId: DEMO_USER_ID },
+      { onError: () => setActionError('Failed to stop timer') },
+    )
   }, [stopTimer])
 
   return (
     <div className="h-12 flex items-center gap-3 px-4 bg-white border border-border rounded-lg">
       {isRunning && (
         <span className="h-2 w-2 rounded-full bg-brand animate-pulse-dot shrink-0" />
+      )}
+
+      {autoStopped && !isRunning && (
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 text-amber-700 px-2.5 py-0.5 text-xs font-medium whitespace-nowrap">
+          Timer auto-stopped after the 12h limit
+        </span>
       )}
 
       {isRunning ? (
@@ -86,6 +118,10 @@ export function TimeTracker() {
           <option key={p.id} value={p.id}>{p.name}</option>
         ))}
       </select>
+
+      {actionError && (
+        <span className="text-xs text-error whitespace-nowrap">{actionError}</span>
+      )}
     </div>
   )
 }

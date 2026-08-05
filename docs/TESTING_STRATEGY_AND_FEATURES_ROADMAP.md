@@ -170,11 +170,11 @@ Based on the **Dashboard** page and the global **TimeTracker** component.
 - **Unit:** checksum immutability, policy-window rule, filter query building. **Type check:** both. **Integration:** create manual entry → patch within window → patch after window as worker rejected.
 - **Commit:** `feat(time-entries): edit, filters, tagging` — **done 2026-08-05**
 
-#### Task 2.2 — Timer hardening 🟪
+#### Task 2.2 — Timer hardening 🟪 ✅
 - **Backend:** enforce one running timer per user (exists — return 409), min duration 1 min (discard <1 min), max 12h auto-stop (24h admin override), timer start against archived project blocked.
 - **Frontend:** optimistic start/stop with rollback on error; auto-stop notification; disable Start when project unselected (exists); offline queuing (stub → Phase 7).
 - **Unit:** min/max duration rules, auto-stop trigger, single-active-timer. **Type check:** both. **Integration:** start → duplicate start 409 → stop computes duration → pending.
-- **Commit:** `feat(timer): duration policy + optimistic UI`
+- **Commit:** `feat(timer): duration policy + optimistic UI` — **done 2026-08-05**
 
 #### Task 2.3 — Dashboard aggregation 🟪
 - **Backend:** `GET /api/v1/reports/me` — weekly total hours, utilization %, active project count for the current user (aggregates in Drizzle).

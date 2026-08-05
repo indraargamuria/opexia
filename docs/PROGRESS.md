@@ -79,7 +79,7 @@
 | Task | Status |
 |------|--------|
 | 2.1 Time entries CRUD & filtering | Complete |
-| 2.2 Timer hardening | Pending |
+| 2.2 Timer hardening | Complete |
 | 2.3 Dashboard aggregation | Pending |
 
 ### 2.1 Time Entries CRUD & Filtering
@@ -87,6 +87,11 @@
 - **Backend routes:** GET `/api/v1/time-entries` now applies the filters (drizzle `gte`/`lte`/`eq`, 400 on invalid status/date); PATCH `/api/v1/time-entries/:id` — 404 unknown, 409 running (stop timer first), 409 finalized (approved/invoiced immutable), 409 outside edit window (requires manager approval), 400 archived project, recomputes SHA-256 `checksum` on save, replaces `tagIds` junction rows; tagging also supported on create (already existed)
 - **Frontend:** `lib/query.ts` (`buildQueryString`, unit tested), `api.timeEntries.list(params)`/`update`, `useTimeEntries(params)` (queryKey includes filters), `useUpdateTimeEntry`; Dashboard now has a working filter bar (date range, project, status, Clear), a functional "Add Manual Entry" modal (project/date/start time/duration/description/tags multi-select) reusing create, and an Edit action for pending entries reusing the same modal via update
 - **Tests:** `test/timeEntries.test.ts` (unit: status/finalized enums, edit window incl. custom window, filter building incl. throws), `test/time-entries.integration.test.ts` (11: tag on create, patch within window + checksum change, patch after window 409, patch finalized/running 409, tag replacement, date/project/status/user filters, invalid status 400), `query.test.ts` (frontend)
+
+### 2.2 Timer Hardening
+- **Backend:** `src/lib/timer.ts` — `isUnderMinDuration` (discard <1 min), `isOverdue` (12h max, 24h admin override constant), `maxDurationMinutes`; timer/start auto-stops an overdue running timer before allowing a new start, keeps single-running-timer 409 guard; timer/stop deletes sub-minute runs (`discarded: true`) and finalizes others as pending with computed duration + checksum; timer/current auto-stops overdue timers (pending, 720min) before returning
+- **Frontend:** `useStartTimer`/`useStopTimer` now optimistic (onMutate sets query data, onError rolls back + refetches); TimeTracker shows a "Timer auto-stopped after the 12h limit" banner when a running timer disappears without a manual stop, plus inline action error messages
+- **Tests:** `test/timer.test.ts` (unit: min duration, overdue at 12h, custom max, 24h admin override), `test/timer.integration.test.ts` (10: duplicate start 409, auto-stop-before-start, stop computes 95min pending, sub-minute discard, 404 no timer, current null/auto-stop/relations/requires userId, single running invariant)
 - **Tests:** `test/tags.test.ts` (unit: hex validator), `test/tags.integration.test.ts` (8: usage counts, get by id, invalid color 400, duplicate 409, PATCH, delete cascades junction rows, delete blocked on invoiced, 404), `color.test.ts` (frontend)
 
 ---

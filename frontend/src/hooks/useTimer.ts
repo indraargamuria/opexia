@@ -18,7 +18,24 @@ export function useStartTimer() {
   return useMutation({
     mutationFn: (data: { userId: string; projectId: string; description?: string }) =>
       api.timer.start(data),
-    onSuccess: (_data, variables) => {
+    onMutate: async ({ userId, projectId }) => {
+      await queryClient.cancelQueries({ queryKey: ['timer', 'current', userId] })
+      const previous = queryClient.getQueryData(['timer', 'current', userId])
+      queryClient.setQueryData(['timer', 'current', userId], {
+        id: `optimistic-${Date.now()}`,
+        userId,
+        projectId,
+        startedAt: new Date().toISOString(),
+        status: 'running',
+        entryMethod: 'timer',
+      })
+      return { previous }
+    },
+    onError: (_err, variables, context: any) => {
+      queryClient.setQueryData(['timer', 'current', variables.userId], context?.previous)
+      queryClient.invalidateQueries({ queryKey: ['timer', 'current', variables.userId] })
+    },
+    onSettled: (_data, _err, variables) => {
       queryClient.invalidateQueries({ queryKey: ['timer', 'current', variables.userId] })
       queryClient.invalidateQueries({ queryKey: ['time-entries'] })
     },
@@ -29,7 +46,17 @@ export function useStopTimer() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (data: { userId: string }) => api.timer.stop(data),
-    onSuccess: (_data, variables) => {
+    onMutate: async ({ userId }) => {
+      await queryClient.cancelQueries({ queryKey: ['timer', 'current', userId] })
+      const previous = queryClient.getQueryData(['timer', 'current', userId])
+      queryClient.setQueryData(['timer', 'current', userId], null)
+      return { previous }
+    },
+    onError: (_err, variables, context: any) => {
+      queryClient.setQueryData(['timer', 'current', variables.userId], context?.previous)
+      queryClient.invalidateQueries({ queryKey: ['timer', 'current', variables.userId] })
+    },
+    onSettled: (_data, _err, variables) => {
       queryClient.invalidateQueries({ queryKey: ['timer', 'current', variables.userId] })
       queryClient.invalidateQueries({ queryKey: ['time-entries'] })
     },
