@@ -10,7 +10,7 @@
 | Task | Status |
 |------|--------|
 | 0.1 Frontend test infrastructure (Vitest + Testing Library) | Complete |
-| 0.2 Backend test infrastructure (Vitest + in-memory D1 shim) | Pending |
+| 0.2 Backend test infrastructure (Vitest + in-memory D1 shim) | Complete |
 | 0.3 Type check gates (frontend + backend) | Pending |
 | 0.4 Auto commit & push automation | Pending |
 
@@ -19,6 +19,15 @@
 - `vitest.config.ts`: jsdom environment, `@` alias, `src/test/setup.ts`
 - `src/lib/utils.test.ts`: unit tests for `cn()`, `formatDuration()`, `formatMinutes()` (5 tests)
 - Scripts: `npm run test`, `npm run test:watch`, `npm run typecheck`
+
+### 0.2 Backend Test Infrastructure
+- Added dev deps: `vitest`, `typescript`, `@types/node`, `@types/better-sqlite3`
+- `test/d1-shim.ts`: D1-compatible shim over `better-sqlite3` (`prepare/bind/all/first/run/raw/batch/exec`), applies Drizzle migrations to in-memory SQLite
+- `test/helpers.ts`: `createTestEnv`, `makeRequest`, `apiRequest`, `db`, `seedUser`, `seedClient`, `seedProject`
+- `test/checksum.test.ts`: unit tests for `checksum()` (known SHA-256 vector, determinism, sensitivity)
+- `test/projects.integration.test.ts`: integration test for `POST /api/v1/projects` (happy path + validation 400)
+- Refactored `checksum` from `src/index.ts` into `src/lib/crypto.ts` for testability
+- Scripts: `npm run test`, `npm run typecheck`; tsconfig adds `allowImportingTsExtensions`, `types: [node]`
 
 ---
 

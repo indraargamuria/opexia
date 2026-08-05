@@ -111,11 +111,11 @@ Sets up the gates so every later task is automatically verifiable and self-shipp
 - **Unit:** formatter/`cn` edge cases. **Type check:** `tsc -b`. **Integration:** N/A (infra only).
 - **Commit:** `test(frontend): add vitest + testing-library setup` — **done 2026-08-05**
 
-#### Task 0.2 — Backend test infrastructure 🟦
+#### Task 0.2 — Backend test infrastructure 🟦 ✅
 - Add `vitest` to `backend/`. Create `backend/test/helpers.ts` (`createTestDb`, `seedFixtures`, `makeRequest`) using `better-sqlite3` + `drizzle-orm/better-sqlite3` with `drizzle-kit` migration applied in-memory.
 - Sample unit test for `checksum()` and an integration test hitting `POST /api/v1/projects`.
 - **Unit:** `checksum` known-vector. **Type check:** `tsc --noEmit`. **Integration:** route happy path + validation 400.
-- **Commit:** `test(backend): add vitest + in-memory D1 test harness`
+- **Commit:** `test(backend): add vitest + in-memory D1 test harness` — **done 2026-08-05** (delivered as `test(backend): add vitest + in-memory D1 test harness`)
 
 #### Task 0.3 — Type check gates 🟪
 - Add `typecheck` scripts to both packages. Ensure CI-style `tsc` runs clean on current code (fix any drift).

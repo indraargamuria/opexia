@@ -2,8 +2,9 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { logger } from 'hono/logger'
 import { drizzle } from 'drizzle-orm/d1'
-import { desc, eq, and, isNull } from 'drizzle-orm'
+import { desc, eq, and } from 'drizzle-orm'
 import * as schema from './db/schema'
+import { checksum } from './lib/crypto'
 
 const app = new Hono<{ Bindings: { opexai_db: any } }>()
 
@@ -17,13 +18,6 @@ app.use('*', cors({
 
 function db(c: any) {
   return drizzle(c.env.opexai_db, { schema })
-}
-
-function checksum(input: string): Promise<string> {
-  const data = new TextEncoder().encode(input)
-  return crypto.subtle.digest('SHA-256', data).then((buf) =>
-    Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, '0')).join('')
-  )
 }
 
 // ─── Projects ───────────────────────────────────────────────────────────────
