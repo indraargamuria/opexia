@@ -1,6 +1,6 @@
 export { useClients, useCreateClient, useUpdateClient, useDeleteClient } from './useClients'
 export { useProjects, useCreateProject, useUpdateProject, useDeleteProject } from './useProjects'
 export { useTeamMembers, useAssignTeamMember, useUpdateTeamMember, useRemoveTeamMember, useUsers } from './useTeamMembers'
-export { useTags, useCreateTag } from './useTags'
+export { useTags, useCreateTag, useUpdateTag, useDeleteTag } from './useTags'
 export { useTimeEntries, useCreateTimeEntry } from './useTimeEntries'
 export { useActiveTimer, useStartTimer, useStopTimer } from './useTimer'

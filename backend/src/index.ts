@@ -8,6 +8,7 @@ import { checksum } from './lib/crypto'
 import { isValidClientCode, isUniqueViolation } from './lib/validators'
 import { canTransition, isValidDateRange, budgetUtilization, creatableProjectStatuses } from './lib/projects'
 import { isValidTeamRole } from './lib/teamMembers'
+import { isValidHexColor } from './lib/tags'
 
 const app = new Hono<{ Bindings: { opexai_db: any } }>()
 
@@ -341,7 +342,26 @@ app.get('/api/v1/tags', async (c) => {
   const rows = await d.query.tags.findMany({
     orderBy: [desc(schema.tags.createdAt)],
   })
-  return c.json(rows)
+  const usage = await d.select({
+    tagId: schema.timeEntryTags.tagId,
+    count: sql<number>`count(*)`,
+  })
+    .from(schema.timeEntryTags)
+    .groupBy(schema.timeEntryTags.tagId)
+  const usageByTag = new Map(usage.map((r) => [r.tagId, Number(r.count)]))
+  return c.json(rows.map((r) => ({ ...r, usageCount: usageByTag.get(r.id) ?? 0 })))
+})
+
+app.get('/api/v1/tags/:id', async (c) => {
+  const d = db(c)
+  const row = await d.query.tags.findFirst({
+    where: eq(schema.tags.id, c.req.param('id')),
+  })
+  if (!row) return c.json({ error: 'Tag not found' }, 404)
+  const [countRow] = await d.select({ count: sql<number>`count(*)` })
+    .from(schema.timeEntryTags)
+    .where(eq(schema.timeEntryTags.tagId, row.id))
+  return c.json({ ...row, usageCount: Number(countRow.count) })
 })
 
 app.post('/api/v1/tags', async (c) => {
@@ -350,12 +370,66 @@ app.post('/api/v1/tags', async (c) => {
   if (!body.name) {
     return c.json({ error: 'name is required' }, 400)
   }
-  const [row] = await d.insert(schema.tags).values({
-    name: body.name,
-    color: body.color,
-    erpCode: body.erpCode,
-  }).returning()
-  return c.json(row, 201)
+  if (body.color !== undefined && !isValidHexColor(body.color)) {
+    return c.json({ error: 'color must be a 6-digit hex code like #6366f1' }, 400)
+  }
+  try {
+    const [row] = await d.insert(schema.tags).values({
+      name: body.name,
+      color: body.color,
+      category: body.category,
+      erpCode: body.erpCode,
+    }).returning()
+    return c.json(row, 201)
+  } catch (err) {
+    if (isUniqueViolation(err)) {
+      return c.json({ error: 'A tag with this name already exists' }, 409)
+    }
+    throw err
+  }
+})
+
+app.patch('/api/v1/tags/:id', async (c) => {
+  const d = db(c)
+  const body = await c.req.json()
+  if (body.color !== undefined && !isValidHexColor(body.color)) {
+    return c.json({ error: 'color must be a 6-digit hex code like #6366f1' }, 400)
+  }
+  const patch: Record<string, unknown> = {}
+  if (body.name !== undefined) patch.name = body.name
+  if (body.color !== undefined) patch.color = body.color
+  if (body.category !== undefined) patch.category = body.category
+  if (body.erpCode !== undefined) patch.erpCode = body.erpCode
+  try {
+    const [row] = await d.update(schema.tags)
+      .set({ ...patch, updatedAt: new Date() })
+      .where(eq(schema.tags.id, c.req.param('id')))
+      .returning()
+    if (!row) return c.json({ error: 'Tag not found' }, 404)
+    return c.json(row)
+  } catch (err) {
+    if (isUniqueViolation(err)) {
+      return c.json({ error: 'A tag with this name already exists' }, 409)
+    }
+    throw err
+  }
+})
+
+app.delete('/api/v1/tags/:id', async (c) => {
+  const d = db(c)
+  const id = c.req.param('id')
+  const tag = await d.query.tags.findFirst({ where: eq(schema.tags.id, id) })
+  if (!tag) return c.json({ error: 'Tag not found' }, 404)
+  const [invoicedRow] = await d.select({ count: sql<number>`count(*)` })
+    .from(schema.timeEntryTags)
+    .innerJoin(schema.timeEntries, eq(schema.timeEntryTags.timeEntryId, schema.timeEntries.id))
+    .where(and(eq(schema.timeEntryTags.tagId, id), eq(schema.timeEntries.status, 'invoiced')))
+  if (Number(invoicedRow.count) > 0) {
+    return c.json({ error: 'Tag is used by invoiced time entries and cannot be deleted' }, 409)
+  }
+  await d.delete(schema.timeEntryTags).where(eq(schema.timeEntryTags.tagId, id))
+  await d.delete(schema.tags).where(eq(schema.tags.id, id))
+  return c.json({ ok: true })
 })
 
 // ─── Time Entries ───────────────────────────────────────────────────────────

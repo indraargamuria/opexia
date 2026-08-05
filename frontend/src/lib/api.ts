@@ -47,6 +47,10 @@ export const api = {
     list: () => request<unknown[]>('/api/v1/tags'),
     create: (data: Record<string, unknown>) =>
       request<unknown>('/api/v1/tags', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: string, data: Record<string, unknown>) =>
+      request<unknown>(`/api/v1/tags/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    remove: (id: string) =>
+      request<unknown>(`/api/v1/tags/${id}`, { method: 'DELETE' }),
   },
   timeEntries: {
     list: () => request<unknown[]>('/api/v1/time-entries'),

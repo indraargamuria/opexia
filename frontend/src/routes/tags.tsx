@@ -1,25 +1,55 @@
+import { useState, type FormEvent } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
-import { useTags } from '@/hooks'
+import { useTags, useCreateTag, useUpdateTag, useDeleteTag } from '@/hooks'
+import { isValidHexColor } from '@/lib/color'
 
 export const Route = createFileRoute('/tags')({
   component: Tags,
 })
 
+const inputClass =
+  'h-9 px-3 rounded-md border border-border bg-white text-sm text-dark-text placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand'
+
+const CATEGORIES = ['Billing', 'Type']
+
 function ColorDot({ color }: { color: string }) {
   return <span className="h-3 w-3 rounded-full border border-border shrink-0" style={{ backgroundColor: color }} />
 }
 
+function CategoryBadge({ category }: { category?: string }) {
+  if (!category) return <span className="text-xs text-muted">—</span>
+  const isBilling = category === 'Billing'
+  return (
+    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${isBilling ? 'bg-brand-light text-brand' : 'bg-purple-50 text-purple-700'}`}>
+      {category}
+    </span>
+  )
+}
+
 function Tags() {
   const { data: tags = [], isLoading, error, refetch } = useTags()
+  const deleteTag = useDeleteTag()
+  const [showNew, setShowNew] = useState(false)
+  const [editing, setEditing] = useState<any | null>(null)
 
   const erpMapped = tags.filter((t: any) => t.erpCode).length
-  const mostUsed = tags.length > 0 ? (tags[0] as any) : null
+  const mostUsed: any = [...tags].sort((a: any, b: any) => (b.usageCount ?? 0) - (a.usageCount ?? 0))[0]
+  const categories = new Set(tags.map((t: any) => t.category).filter(Boolean)).size
+
+  const handleDelete = (tag: any) => {
+    if (window.confirm(`Delete tag "${tag.name}"?`)) {
+      deleteTag.mutate(tag.id)
+    }
+  }
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold text-dark-text">Tags</h1>
-        <button className="bg-brand text-white hover:bg-brand-hover active:bg-brand-active px-4 py-2 rounded-md text-sm font-medium transition-colors duration-75">
+        <button
+          onClick={() => setShowNew(true)}
+          className="bg-brand text-white hover:bg-brand-hover active:bg-brand-active px-4 py-2 rounded-md text-sm font-medium transition-colors duration-75"
+        >
           New Tag
         </button>
       </div>
@@ -47,13 +77,13 @@ function Tags() {
         <div className="col-span-3">
           <div className="rounded-lg border border-border bg-white p-4">
             <p className="text-xs font-medium text-muted uppercase tracking-wide">Categories</p>
-            <p className="text-2xl font-semibold text-dark-text mt-1">—</p>
+            <p className="text-2xl font-semibold text-dark-text mt-1">{categories}</p>
           </div>
         </div>
       </div>
 
       {isLoading ? (
-        <TableSkeleton rows={6} cols={5} />
+        <TableSkeleton rows={6} cols={6} />
       ) : error ? (
         <ErrorState message="Failed to load tags" onRetry={() => refetch()} />
       ) : tags.length === 0 ? (
@@ -64,7 +94,9 @@ function Tags() {
             <thead>
               <tr className="bg-light-bg border-b border-border">
                 <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-muted">Tag</th>
+                <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-muted">Category</th>
                 <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-muted">ERP Code</th>
+                <th className="px-3 py-2.5 text-right text-xs font-semibold uppercase tracking-wide text-muted">Usage</th>
                 <th className="px-3 py-2.5 text-right text-xs font-semibold uppercase tracking-wide text-muted">Actions</th>
               </tr>
             </thead>
@@ -77,6 +109,7 @@ function Tags() {
                       <span className="font-medium text-dark-text">{tag.name}</span>
                     </div>
                   </td>
+                  <td className="px-3 py-1.5"><CategoryBadge category={tag.category} /></td>
                   <td className="px-3 py-1.5">
                     {tag.erpCode ? (
                       <span className="font-mono text-xs text-muted">{tag.erpCode}</span>
@@ -84,13 +117,20 @@ function Tags() {
                       <span className="text-xs text-muted">—</span>
                     )}
                   </td>
+                  <td className="px-3 py-1.5 text-right font-mono text-xs text-muted">{tag.usageCount ?? 0}</td>
                   <td className="px-3 py-1.5">
-                    <div className="flex items-center gap-1">
-                      <button className="inline-flex items-center justify-center h-8 w-8 rounded-md hover:bg-highlight text-muted-foreground transition-colors duration-75" title="Edit">
-                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" /></svg>
+                    <div className="flex items-center justify-end gap-2">
+                      <button
+                        onClick={() => setEditing(tag)}
+                        className="inline-flex items-center justify-center h-8 px-3 rounded-md border border-border text-xs font-medium text-dark-text hover:bg-highlight transition-colors duration-75"
+                      >
+                        Edit
                       </button>
-                      <button className="inline-flex items-center justify-center h-8 w-8 rounded-md hover:bg-highlight text-muted-foreground transition-colors duration-75" title="Delete">
-                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" /></svg>
+                      <button
+                        onClick={() => handleDelete(tag)}
+                        className="inline-flex items-center justify-center h-8 px-3 rounded-md bg-error text-white hover:bg-red-700 text-xs font-medium transition-colors duration-75"
+                      >
+                        Delete
                       </button>
                     </div>
                   </td>
@@ -100,6 +140,88 @@ function Tags() {
           </table>
         </div>
       )}
+
+      {showNew && <TagFormModal onClose={() => setShowNew(false)} />}
+      {editing && <TagFormModal tag={editing} onClose={() => setEditing(null)} />}
+    </div>
+  )
+}
+
+function TagFormModal({ tag, onClose }: { tag?: any; onClose: () => void }) {
+  const createTag = useCreateTag()
+  const updateTag = useUpdateTag()
+  const isEditing = Boolean(tag)
+  const [name, setName] = useState(tag?.name ?? '')
+  const [color, setColor] = useState(tag?.color ?? '#6366f1')
+  const [category, setCategory] = useState(tag?.category ?? '')
+  const [erpCode, setErpCode] = useState(tag?.erpCode ?? '')
+  const [error, setError] = useState<string | null>(null)
+  const mutation = isEditing ? updateTag : createTag
+
+  const handleSubmit = (e: FormEvent) => {
+    e.preventDefault()
+    if (!name) return
+    if (!isValidHexColor(color)) {
+      setError('Color must be a 6-digit hex code like #6366f1')
+      return
+    }
+    setError(null)
+    const payload = { name, color, category: category || undefined, erpCode: erpCode || undefined }
+    const onSuccess = () => onClose()
+    if (isEditing) {
+      updateTag.mutate({ id: tag.id, data: payload }, { onSuccess, onError: (err: any) => setError(err.message ?? 'Failed to update tag') })
+    } else {
+      createTag.mutate(payload, { onSuccess, onError: (err: any) => setError(err.message ?? 'Failed to create tag') })
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-40 bg-black/30 flex items-center justify-center p-6" onClick={onClose}>
+      <form
+        onSubmit={handleSubmit}
+        onClick={(e) => e.stopPropagation()}
+        className="rounded-lg border border-border bg-white p-6 w-full max-w-lg space-y-4"
+      >
+        <h2 className="text-lg font-semibold text-dark-text">{isEditing ? 'Edit Tag' : 'New Tag'}</h2>
+        <div className="space-y-4">
+          <div>
+            <label className="text-sm font-medium text-dark-text">Name</label>
+            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Overtime" className={`${inputClass} w-full mt-1`} />
+          </div>
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <label className="text-sm font-medium text-dark-text">Color</label>
+              <input value={color} onChange={(e) => setColor(e.target.value)} placeholder="#6366f1" className={`${inputClass} w-full mt-1 font-mono text-xs`} />
+            </div>
+            <div>
+              <label className="text-sm font-medium text-dark-text">Category</label>
+              <select value={category} onChange={(e) => setCategory(e.target.value)} className={`${inputClass} w-full mt-1`}>
+                <option value="">None</option>
+                {CATEGORIES.map((cat) => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="text-sm font-medium text-dark-text">ERP code</label>
+              <input value={erpCode} onChange={(e) => setErpCode(e.target.value)} placeholder="ERP-001" className={`${inputClass} w-full mt-1 font-mono text-xs`} />
+            </div>
+          </div>
+        </div>
+        {error && <p className="text-xs text-error">{error}</p>}
+        <div className="flex items-center justify-end gap-3 pt-2">
+          <button type="button" onClick={onClose} className="border border-border bg-white text-dark-text hover:bg-highlight px-4 py-2 rounded-md text-sm font-medium transition-colors duration-75">
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={!name || mutation.isPending}
+            className="bg-brand text-white hover:bg-brand-hover active:bg-brand-active disabled:opacity-50 px-4 py-2 rounded-md text-sm font-medium transition-colors duration-75"
+          >
+            {mutation.isPending ? (isEditing ? 'Saving...' : 'Creating...') : (isEditing ? 'Save Changes' : 'Create Tag')}
+          </button>
+        </div>
+      </form>
     </div>
   )
 }

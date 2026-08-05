@@ -96,3 +96,17 @@ export async function seedTeamMember(env: TestEnv, userId: string, projectId: st
   }).returning()
   return row
 }
+
+export async function seedTag(env: TestEnv, overrides: Partial<typeof schema.tags.$inferInsert> = {}) {
+  const suffix = crypto.randomUUID().slice(0, 8)
+  const [row] = await db(env).insert(schema.tags).values({
+    name: overrides.name ?? `Tag ${suffix}`,
+    color: overrides.color ?? '#6366f1',
+    ...overrides,
+  }).returning()
+  return row
+}
+
+export async function attachTag(env: TestEnv, timeEntryId: string, tagId: string) {
+  await db(env).insert(schema.timeEntryTags).values({ timeEntryId, tagId })
+}

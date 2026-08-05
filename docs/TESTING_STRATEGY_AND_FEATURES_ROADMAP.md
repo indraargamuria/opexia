@@ -152,11 +152,11 @@ Based on the **Projects**, **Team**, and **Tags** pages. Completes the CRUD surf
 - **Unit:** role enum validation, remove-preserves-entries logic. **Type check:** both. **Integration:** assign member → remove → old time entries still resolvable.
 - **Commit:** `feat(team-members): edit/remove + utilization wiring` — **done 2026-08-05**
 
-#### Task 1.4 — Tags module completion 🟪
+#### Task 1.4 — Tags module completion 🟪 ✅
 - **Backend:** add `GET /:id`, `PATCH /:id`, `DELETE` (cascade junction, block delete if referenced by invoiced entries). Color hex validation, `erp_code` mapping.
 - **Frontend:** wire Tags page create/edit/delete; category and ERP display from real data.
 - **Unit:** hex validator, cascade-delete guard. **Type check:** both. **Integration:** create → attach to entry → delete → junction rows removed.
-- **Commit:** `feat(tags): full CRUD + erp mapping`
+- **Commit:** `feat(tags): full CRUD + erp mapping` — **done 2026-08-05**
 
 ---
 

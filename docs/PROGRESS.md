@@ -48,7 +48,7 @@
 | 1.1 Clients module (backend CRUD + frontend) | Complete |
 | 1.2 Projects module completion (PATCH/DELETE/status/budget) | Complete |
 | 1.3 Team Members module completion (PATCH/DELETE) | Complete |
-| 1.4 Tags module completion (PATCH/DELETE) | Pending |
+| 1.4 Tags module completion (PATCH/DELETE) | Complete |
 
 ### 1.1 Clients Module
 - **Backend:** full CRUD `/api/v1/clients` — GET list, GET by id, POST, PATCH (incl. `is_active` toggle), DELETE (soft-delete, blocked with 409 when projects reference the client)
@@ -67,6 +67,11 @@
 - **Backend:** `src/lib/teamMembers.ts` — `isValidTeamRole` enum validator (worker, manager, admin, viewer); `GET /api/v1/users` (with per-user `loggedMinutes`); team-members list now computes per-assignment `loggedMinutes`; added `GET /:id`, `PATCH /:id` (role/billableRate/projectId, role validation, 404), `DELETE /:id` (404, hard delete — historical time entries unaffected since they reference user+project, not the assignment row)
 - **Frontend:** `api.users.list`, `api.teamMembers.update/remove`, `useUsers`/`useUpdateTeamMember`/`useRemoveTeamMember` hooks; Team page "Assign Member" modal (user + project pickers, role, rate), per-row Edit/Remove actions, Logged Hrs column, utilization progress bars (logged minutes vs 40h weekly target), Avg Utilization metric card
 - **Tests:** `test/teamMembers.test.ts` (unit: role enum), `test/team-members.integration.test.ts` (10: users aggregate, relations + loggedMinutes, get by id, invalid role 400, PATCH role/rate, DELETE preserves time entries, 404s)
+
+### 1.4 Tags Module Completion
+- **Backend:** `src/lib/tags.ts` — `isValidHexColor` validator; `category` column added to `tags` via generated migration `0001_add_tags_category.sql`; tags list/get include `usageCount` (junction aggregate); added `GET /:id`, `PATCH /:id` (name/color/category/erpCode, hex + unique-name validation, 404), `DELETE /:id` — blocks 409 when referenced by `invoiced` entries, otherwise deletes junction rows then the tag
+- **Frontend:** `lib/color.ts` + `api.tags.update/remove`, `useUpdateTag`/`useDeleteTag` hooks; Tags page "New Tag" modal (color/category/ERP), per-row Edit/Delete, Category badge + ERP code + Usage count columns, metrics wired to real data (Most Used by usageCount, Categories count)
+- **Tests:** `test/tags.test.ts` (unit: hex validator), `test/tags.integration.test.ts` (8: usage counts, get by id, invalid color 400, duplicate 409, PATCH, delete cascades junction rows, delete blocked on invoiced, 404), `color.test.ts` (frontend)
 
 ---
 

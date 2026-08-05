@@ -117,6 +117,7 @@ export const tags = sqliteTable(
     id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
     name: text('name').notNull().unique(),
     color: text('color').notNull().default('#6366f1'),
+    category: text('category'),
     erpCode: text('erp_code'),
     ...timestamps,
   },
