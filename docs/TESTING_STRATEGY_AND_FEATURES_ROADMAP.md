@@ -221,11 +221,11 @@ Based on the **Reports** page.
 - **Unit:** period-to-range mapper, threshold color function. **Type check:** both. **Integration:** select custom range → rendered table matches API payload.
 - **Commit:** `feat(reports): live reports page + period filters` — **done 2026-08-05**
 
-#### Task 4.3 — Excel export 🟪
+#### Task 4.3 — Excel export 🟪 ✅
 - **Backend:** `GET /api/v1/reports/export?format=xlsx` (SheetJS) — schema from PRD §3.3.2 (`Date | Worker | Client | Project | Task Description | Tags | Duration (h) | Rate | Amount | Status`).
 - **Frontend:** wire Reports "Export Excel" button to the endpoint (download blob).
 - **Unit:** workbook row mapper (headers, amounts, status mapping). **Type check:** both. **Integration:** export returns valid xlsx buffer with expected sheet name/columns.
-- **Commit:** `feat(export): excel export with ERP-ready schema`
+- **Commit:** `feat(export): excel export with ERP-ready schema` — **done 2026-08-05**
 
 #### Task 4.4 — CSV export 🟪
 - **Backend:** streaming CSV export with same schema; RFC 4180 quoting.

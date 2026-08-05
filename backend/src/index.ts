@@ -12,6 +12,7 @@ import { isValidHexColor } from './lib/tags'
 import { buildEntryFilters, isFinalized, isWithinEditWindow, reviewBlockReason } from './lib/timeEntries'
 import { isOverdue, isUnderMinDuration, maxDurationMinutes } from './lib/timer'
 import { weekBounds, utilizationPercent, roundedHours, reportWindow, weeksInWindow, aggregateEntries, costForMinutes, roundMoney, budgetReport, teamUtilizationPercent, WEEKLY_TARGET_HOURS } from './lib/reports'
+import { toExportRow, writeXlsxBuffer, buildExportCsv } from './lib/exportRows'
 import { userRoles, isUserRole, canApprove, canViewAuditLogs, canViewTeamReports, isGlobalAdmin } from './lib/rbac'
 import type { UserRole } from './lib/rbac'
 
@@ -969,6 +970,113 @@ app.get('/api/v1/reports/team', requireRole(...TEAM_REPORTS_ROLES), async (c) =>
       hours: roundedHours(teamMinutes),
       activeWorkerCount: members.length,
       averageUtilizationPercent: averageUtilization,
+    },
+  })
+})
+
+app.get('/api/v1/reports/export', requireRole(...TEAM_REPORTS_ROLES), async (c) => {
+  const d = db(c)
+  const format = c.req.query('format')
+  if (format !== 'xlsx' && format !== 'csv') {
+    return c.json({ error: "format must be 'xlsx' or 'csv'" }, 400)
+  }
+  const parsed = getReportPeriod(c)
+  if (!parsed.ok) return c.json({ error: parsed.error }, 400)
+  const period = parsed.period
+
+  const entries = await d.select({
+    id: schema.timeEntries.id,
+    startedAt: schema.timeEntries.startedAt,
+    userId: schema.timeEntries.userId,
+    projectId: schema.timeEntries.projectId,
+    description: schema.timeEntries.description,
+    durationMinutes: schema.timeEntries.durationMinutes,
+    status: schema.timeEntries.status,
+  }).from(schema.timeEntries).where(and(
+    ne(schema.timeEntries.status, 'rejected'),
+    ne(schema.timeEntries.status, 'running'),
+    gte(schema.timeEntries.startedAt, period.start),
+    lt(schema.timeEntries.startedAt, period.end),
+  ))
+
+  const projectIds = [...new Set(entries.map((e) => e.projectId))]
+  const userIds = [...new Set(entries.map((e) => e.userId))]
+
+  const [projects, users, rateRows] = await Promise.all([
+    projectIds.length > 0
+      ? d.query.projects.findMany({ where: inArray(schema.projects.id, projectIds), with: { client: true } })
+      : Promise.resolve([]),
+    userIds.length > 0
+      ? d.select({ id: schema.users.id, name: schema.users.name }).from(schema.users).where(inArray(schema.users.id, userIds))
+      : Promise.resolve([]),
+    projectIds.length > 0
+      ? d.select({
+          userId: schema.teamMembers.userId,
+          projectId: schema.teamMembers.projectId,
+          rate: schema.teamMembers.billableRate,
+        }).from(schema.teamMembers).where(inArray(schema.teamMembers.projectId, projectIds))
+      : Promise.resolve([]),
+  ])
+
+  const projectMap = new Map(projects.map((p) => [p.id, p]))
+  const userMap = new Map(users.map((u) => [u.id, u.name]))
+  const ratesByProject = new Map<string, Record<string, number | null | undefined>>()
+  for (const r of rateRows) {
+    const map = ratesByProject.get(r.projectId) ?? {}
+    map[r.userId] = r.rate
+    ratesByProject.set(r.projectId, map)
+  }
+
+  const entryIds = entries.map((e) => e.id)
+  const tagRows = entryIds.length > 0
+    ? await d.select({
+        timeEntryId: schema.timeEntryTags.timeEntryId,
+        name: schema.tags.name,
+      }).from(schema.timeEntryTags)
+        .innerJoin(schema.tags, eq(schema.timeEntryTags.tagId, schema.tags.id))
+        .where(inArray(schema.timeEntryTags.timeEntryId, entryIds))
+    : []
+  const tagsByEntry = new Map<string, string[]>()
+  for (const t of tagRows) {
+    const list = tagsByEntry.get(t.timeEntryId) ?? []
+    list.push(t.name)
+    tagsByEntry.set(t.timeEntryId, list)
+  }
+
+  const rows: (string | number)[][] = entries.map((e) => {
+    const project = projectMap.get(e.projectId)
+    const rate = ratesByProject.get(e.projectId)?.[e.userId] ?? project?.client?.billingRate
+    return toExportRow({
+      date: e.startedAt,
+      worker: userMap.get(e.userId) ?? 'Unknown',
+      client: project?.client?.name ?? '',
+      project: project?.name ?? 'Unknown',
+      description: e.description,
+      tags: tagsByEntry.get(e.id) ?? [],
+      durationMinutes: e.durationMinutes,
+      rate,
+      amount: costForMinutes(e.durationMinutes ?? 0, rate),
+      status: e.status,
+    })
+  })
+    .sort((a, b) => String(a[0]).localeCompare(String(b[0])))
+
+  const filename = `opexia-time-entries-${period.dateFrom}_${period.dateTo}.${format}`
+  if (format === 'csv') {
+    const csv = buildExportCsv(rows)
+    return new Response(csv, {
+      headers: {
+        'Content-Type': 'text/csv; charset=utf-8',
+        'Content-Disposition': `attachment; filename="${filename}"`,
+      },
+    })
+  }
+
+  const buffer = writeXlsxBuffer(rows)
+  return new Response(buffer, {
+    headers: {
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': `attachment; filename="${filename}"`,
     },
   })
 })

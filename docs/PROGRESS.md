@@ -134,7 +134,7 @@
 |------|--------|
 | 4.1 Reports backend (project/client/team aggregation) | Complete |
 | 4.2 Reports frontend wiring | Complete |
-| 4.3 Excel export | Pending |
+| 4.3 Excel export | Complete |
 | 4.4 CSV export | Pending |
 
 ### 4.1 Reports Backend Aggregation
@@ -153,6 +153,15 @@
 - **routes/reports.tsx:** live KPI cards (Total Hours / Cost / Clients / Avg Utilization), Project Summary table (hours, utilization bar + %, cost) per client, Team Utilization table with color thresholds, period selector drives API filters, Export buttons still disabled (4.3/4.4)
 - **Tests:** `reports.integration.test.tsx` (2: renders real aggregation data from API; custom range selection drives API filters via `dateFrom`/`dateTo`)
 - Note: default system window is a 90-day rolling window, so out-of-window entries are excluded
+
+### 4.3 Excel Export
+- **lib/exportRows.ts:** `EXPORT_HEADERS` (PRD §3.3.2 10-column schema), `toExportRow` (date as `YYYY-MM-DD`, tags joined `; `, duration hours rounded to 2dp, rate/amount numerics, `exportStatusLabel`), `buildExportWorkbook` + `writeXlsxBuffer` (SheetJS, sheet `Time Entries`, column widths), `csvEscape` + `buildExportCsv` (RFC 4180, BOM, CRLF) shared groundwork for 4.4
+- **Endpoint** `GET /api/v1/reports/export?format=xlsx|csv` (guarded `TEAM_REPORTS_ROLES`, 400 on unknown format/inverted range): window-filtered entries (excludes rejected/running) joined with users, projects, clients, per-project team rates (client billing-rate fallback) and tags; sorted by date; Content-Disposition `opexia-time-entries-<from>_<to>.<ext>`
+- **lib/reports.ts:** `toISODate` fixed to local-date formatting (was UTC-sliced, producing off-by-one `dateFrom`/`dateTo` in UTC+7); this also corrects the period strings returned by all report endpoints
+- **Frontend:** `api.ts` `downloadReport(format, params)` (blob + anchor download, filename parsed from Content-Disposition); Reports page Export Excel/CSV buttons live, disabled while a download is in flight, export errors surfaced in a banner
+- **Deps:** `xlsx@0.18.5` (imported as `import * as XLSX` — esbuild resolves `xlsx.mjs` which has no default export); Worker bundle dry-run 875 KiB
+- **Tests:** `exportRows.test.ts` (9: headers, row mapping incl. missing desc/tags, status labels, CSV escaping, BOM/CRLF, workbook parse round-trip); `reports-export.integration.test.ts` (4: valid xlsx with sheet name + columns + row values, client-rate fallback, worker 403, bad format/inverted range 400); frontend `reports.integration.test.tsx` export-click test
+- **Live smoke:** worker returned 200 with real row (Jane Doe / Acme Corp / Q4 Financial Audit, 0.07h @ 185 = $12.33); CSV branch 200 `text/csv`; worker role 403
 
 ## Completed Features
 

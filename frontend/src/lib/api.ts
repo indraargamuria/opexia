@@ -19,6 +19,32 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json()
 }
 
+function filenameFromDisposition(disposition: string | null, fallback: string): string {
+  if (!disposition) return fallback
+  const match = disposition.match(/filename="?([^";]+)"?/i)
+  return match ? match[1] : fallback
+}
+
+export async function downloadReport(format: 'xlsx' | 'csv', params?: PeriodParams): Promise<void> {
+  const res = await fetch(`${API_URL}/api/v1/reports/export?format=${format}${buildQueryString(params ?? {})}`, {
+    headers: { 'X-User-Id': getSession().id },
+  })
+  if (!res.ok) {
+    const text = await res.text().catch(() => res.statusText)
+    throw new Error(`API error ${res.status}: ${text}`)
+  }
+  const filename = filenameFromDisposition(res.headers.get('content-disposition'), `opexia-time-entries.${format}`)
+  const blob = await res.blob()
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+}
+
 export interface WeeklyReport {
   userId: string
   weekStart: string

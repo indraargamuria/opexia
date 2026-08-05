@@ -3,6 +3,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { routeGuard } from '@/lib/routeGuard'
 import { periodRange, utilizationLevel, utilizationBarClass, utilizationTextClass, toISODate, type PeriodKey } from '@/lib/period'
 import { useReportsOverview } from '@/hooks'
+import { downloadReport } from '@/lib/api'
 
 export const Route = createFileRoute('/reports')({
   beforeLoad: routeGuard('/reports'),
@@ -28,6 +29,19 @@ function Reports() {
     : periodRange(periodKey, now)
 
   const { data, isLoading, isError, error, refetch } = useReportsOverview(params)
+  const [downloading, setDownloading] = useState<'xlsx' | 'csv' | null>(null)
+  const [exportError, setExportError] = useState<string | null>(null)
+
+  async function handleExport(format: 'xlsx' | 'csv') {
+    setDownloading(format)
+    setExportError(null)
+    try {
+      await downloadReport(format, params)
+    } catch (err) {
+      setExportError((err as Error).message)
+    }
+    setDownloading(null)
+  }
 
   const projectRows = data ? [...data.byProject].sort((a, b) => b.minutes - a.minutes) : []
   const members = data?.team.members ?? []
@@ -67,10 +81,18 @@ function Reports() {
               />
             </div>
           )}
-          <button className="border border-border bg-white text-dark-text hover:bg-highlight px-4 py-2 rounded-md text-sm font-medium transition-colors duration-75 disabled:opacity-50" disabled>
+          <button
+            onClick={() => handleExport('xlsx')}
+            disabled={downloading !== null}
+            className="border border-border bg-white text-dark-text hover:bg-highlight px-4 py-2 rounded-md text-sm font-medium transition-colors duration-75 disabled:opacity-50"
+          >
             Export Excel
           </button>
-          <button className="border border-border bg-white text-dark-text hover:bg-highlight px-4 py-2 rounded-md text-sm font-medium transition-colors duration-75 disabled:opacity-50" disabled>
+          <button
+            onClick={() => handleExport('csv')}
+            disabled={downloading !== null}
+            className="border border-border bg-white text-dark-text hover:bg-highlight px-4 py-2 rounded-md text-sm font-medium transition-colors duration-75 disabled:opacity-50"
+          >
             Export CSV
           </button>
         </div>
@@ -80,6 +102,12 @@ function Reports() {
         <div className="rounded-md bg-red-50 border border-error/20 px-4 py-3 text-sm text-error flex items-center justify-between">
           <span>Failed to load reports: {(error as Error).message}</span>
           <button onClick={() => refetch()} className="underline font-medium">Retry</button>
+        </div>
+      )}
+
+      {exportError && (
+        <div className="rounded-md bg-red-50 border border-error/20 px-4 py-3 text-sm text-error">
+          Export failed: {exportError}
         </div>
       )}
 

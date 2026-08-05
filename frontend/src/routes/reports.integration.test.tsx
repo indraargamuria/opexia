@@ -108,4 +108,24 @@ describe('Reports page', () => {
       expect(urls).toContain('dateTo=2026-06-30')
     })
   })
+
+  it('Export Excel downloads a blob from the export endpoint', async () => {
+    const createObjectURL = vi.fn(() => 'blob:mock')
+    const revokeObjectURL = vi.fn()
+    vi.stubGlobal('URL', { ...URL, createObjectURL, revokeObjectURL })
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+
+    renderReports()
+    await waitFor(() => expect(screen.getByText('Alpha')).toBeInTheDocument())
+
+    fireEvent.click(screen.getByText('Export Excel'))
+
+    await waitFor(() => {
+      const urls = fetchedUrls().join(' ')
+      expect(urls).toContain('/api/v1/reports/export?format=xlsx')
+      expect(urls).toContain('dateFrom=')
+    })
+    expect(clickSpy).toHaveBeenCalled()
+    clickSpy.mockRestore()
+  })
 })
