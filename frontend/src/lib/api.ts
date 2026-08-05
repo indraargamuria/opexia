@@ -33,4 +33,12 @@ export const api = {
     create: (data: Record<string, unknown>) =>
       request<unknown>('/api/v1/time-entries', { method: 'POST', body: JSON.stringify(data) }),
   },
+  timer: {
+    start: (data: { userId: string; projectId: string; description?: string }) =>
+      request<unknown>('/api/v1/timer/start', { method: 'POST', body: JSON.stringify(data) }),
+    stop: (data: { userId: string }) =>
+      request<unknown>('/api/v1/timer/stop', { method: 'POST', body: JSON.stringify(data) }),
+    current: (userId: string) =>
+      request<unknown>(`/api/v1/timer/current?userId=${encodeURIComponent(userId)}`),
+  },
 }
