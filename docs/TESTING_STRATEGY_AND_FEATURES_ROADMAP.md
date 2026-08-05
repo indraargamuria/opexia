@@ -146,11 +146,11 @@ Based on the **Projects**, **Team**, and **Tags** pages. Completes the CRUD surf
 - **Unit:** status-machine transitions, budget-threshold calculator, date validation. **Type check:** both. **Integration:** create → transition to archived → timer start against archived project returns 400.
 - **Commit:** `feat(projects): status transitions, budget warnings, edit/delete` — **done 2026-08-05**
 
-#### Task 1.3 — Team Members module completion 🟪
+#### Task 1.3 — Team Members module completion 🟪 ✅
 - **Backend:** add `GET /:id`, `PATCH /:id` (role/rate change), `DELETE` (restrict, preserving historical time entries). Enforce manager/admin-only approval assignment later (Phase 3).
 - **Frontend:** wire Team page assign/edit/remove to API; role badges from real `role`; utilization from logged hours.
 - **Unit:** role enum validation, remove-preserves-entries logic. **Type check:** both. **Integration:** assign member → remove → old time entries still resolvable.
-- **Commit:** `feat(team-members): edit/remove + utilization wiring`
+- **Commit:** `feat(team-members): edit/remove + utilization wiring` — **done 2026-08-05**
 
 #### Task 1.4 — Tags module completion 🟪
 - **Backend:** add `GET /:id`, `PATCH /:id`, `DELETE` (cascade junction, block delete if referenced by invoiced entries). Color hex validation, `erp_code` mapping.

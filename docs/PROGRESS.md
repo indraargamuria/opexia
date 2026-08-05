@@ -47,7 +47,7 @@
 |------|--------|
 | 1.1 Clients module (backend CRUD + frontend) | Complete |
 | 1.2 Projects module completion (PATCH/DELETE/status/budget) | Complete |
-| 1.3 Team Members module completion (PATCH/DELETE) | Pending |
+| 1.3 Team Members module completion (PATCH/DELETE) | Complete |
 | 1.4 Tags module completion (PATCH/DELETE) | Pending |
 
 ### 1.1 Clients Module
@@ -62,6 +62,11 @@
 - **Archived guard:** `POST /api/v1/time-entries` and `POST /api/v1/timer/start` reject archived projects (400)
 - **Frontend:** `lib/budget.ts` (`budgetPercentage`, `budgetLevel`), `api.projects.update/remove`, `useUpdateProject`/`useDeleteProject` hooks; Projects table shows real logged hours in budget bars; per-row Edit/Delete actions; shared `ProjectFormModal` handles both create and edit with inline error display
 - **Tests:** `test/projects.test.ts` (unit: transitions, date range, budget), `test/projects-crud.integration.test.ts` (13: get by id, budget aggregation, duplicate 409, status transitions, delete 409/200, archived guards), `budget.test.ts` (frontend)
+
+### 1.3 Team Members Module Completion
+- **Backend:** `src/lib/teamMembers.ts` — `isValidTeamRole` enum validator (worker, manager, admin, viewer); `GET /api/v1/users` (with per-user `loggedMinutes`); team-members list now computes per-assignment `loggedMinutes`; added `GET /:id`, `PATCH /:id` (role/billableRate/projectId, role validation, 404), `DELETE /:id` (404, hard delete — historical time entries unaffected since they reference user+project, not the assignment row)
+- **Frontend:** `api.users.list`, `api.teamMembers.update/remove`, `useUsers`/`useUpdateTeamMember`/`useRemoveTeamMember` hooks; Team page "Assign Member" modal (user + project pickers, role, rate), per-row Edit/Remove actions, Logged Hrs column, utilization progress bars (logged minutes vs 40h weekly target), Avg Utilization metric card
+- **Tests:** `test/teamMembers.test.ts` (unit: role enum), `test/team-members.integration.test.ts` (10: users aggregate, relations + loggedMinutes, get by id, invalid role 400, PATCH role/rate, DELETE preserves time entries, 404s)
 
 ---
 

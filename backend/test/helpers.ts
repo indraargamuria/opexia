@@ -85,3 +85,14 @@ export async function seedTimeEntry(env: TestEnv, projectId: string, overrides: 
   }).returning()
   return row
 }
+
+export async function seedTeamMember(env: TestEnv, userId: string, projectId: string, overrides: Partial<typeof schema.teamMembers.$inferInsert> = {}) {
+  const [row] = await db(env).insert(schema.teamMembers).values({
+    userId,
+    projectId,
+    role: overrides.role ?? 'worker',
+    billableRate: overrides.billableRate ?? 100,
+    ...overrides,
+  }).returning()
+  return row
+}

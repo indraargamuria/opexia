@@ -31,10 +31,17 @@ export const api = {
     remove: (id: string) =>
       request<unknown>(`/api/v1/projects/${id}`, { method: 'DELETE' }),
   },
+  users: {
+    list: () => request<unknown[]>('/api/v1/users'),
+  },
   teamMembers: {
     list: () => request<unknown[]>('/api/v1/team-members'),
     create: (data: Record<string, unknown>) =>
       request<unknown>('/api/v1/team-members', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: string, data: Record<string, unknown>) =>
+      request<unknown>(`/api/v1/team-members/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    remove: (id: string) =>
+      request<unknown>(`/api/v1/team-members/${id}`, { method: 'DELETE' }),
   },
   tags: {
     list: () => request<unknown[]>('/api/v1/tags'),

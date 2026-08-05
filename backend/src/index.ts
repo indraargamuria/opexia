@@ -2,11 +2,12 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { logger } from 'hono/logger'
 import { drizzle } from 'drizzle-orm/d1'
-import { desc, eq, and, sql } from 'drizzle-orm'
+import { desc, eq, and, sql, asc } from 'drizzle-orm'
 import * as schema from './db/schema'
 import { checksum } from './lib/crypto'
 import { isValidClientCode, isUniqueViolation } from './lib/validators'
 import { canTransition, isValidDateRange, budgetUtilization, creatableProjectStatuses } from './lib/projects'
+import { isValidTeamRole } from './lib/teamMembers'
 
 const app = new Hono<{ Bindings: { opexai_db: any } }>()
 
@@ -242,6 +243,23 @@ app.delete('/api/v1/projects/:id', async (c) => {
   return c.json({ ok: true })
 })
 
+// ─── Users ─────────────────────────────────────────────────────────────────
+
+app.get('/api/v1/users', async (c) => {
+  const d = db(c)
+  const users = await d.query.users.findMany({
+    orderBy: [asc(schema.users.name)],
+  })
+  const agg = await d.select({
+    userId: schema.timeEntries.userId,
+    minutes: sql<number>`sum(${schema.timeEntries.durationMinutes})`,
+  })
+    .from(schema.timeEntries)
+    .groupBy(schema.timeEntries.userId)
+  const loggedByUser = new Map(agg.map((r) => [r.userId, Number(r.minutes) || 0]))
+  return c.json(users.map((u) => ({ ...u, loggedMinutes: loggedByUser.get(u.id) ?? 0 })))
+})
+
 // ─── Team Members ───────────────────────────────────────────────────────────
 
 app.get('/api/v1/team-members', async (c) => {
@@ -250,7 +268,25 @@ app.get('/api/v1/team-members', async (c) => {
     with: { user: true, project: true },
     orderBy: [desc(schema.teamMembers.assignedAt)],
   })
-  return c.json(rows)
+  const agg = await d.select({
+    userId: schema.timeEntries.userId,
+    projectId: schema.timeEntries.projectId,
+    minutes: sql<number>`sum(${schema.timeEntries.durationMinutes})`,
+  })
+    .from(schema.timeEntries)
+    .groupBy(schema.timeEntries.userId, schema.timeEntries.projectId)
+  const loggedByAssignment = new Map(agg.map((r) => [`${r.userId}:${r.projectId}`, Number(r.minutes) || 0]))
+  return c.json(rows.map((r) => ({ ...r, loggedMinutes: loggedByAssignment.get(`${r.userId}:${r.projectId}`) ?? 0 })))
+})
+
+app.get('/api/v1/team-members/:id', async (c) => {
+  const d = db(c)
+  const row = await d.query.teamMembers.findFirst({
+    where: eq(schema.teamMembers.id, c.req.param('id')),
+    with: { user: true, project: true },
+  })
+  if (!row) return c.json({ error: 'Team member assignment not found' }, 404)
+  return c.json(row)
 })
 
 app.post('/api/v1/team-members', async (c) => {
@@ -259,6 +295,9 @@ app.post('/api/v1/team-members', async (c) => {
   if (!body.userId || !body.projectId) {
     return c.json({ error: 'userId and projectId are required' }, 400)
   }
+  if (body.role !== undefined && !isValidTeamRole(body.role)) {
+    return c.json({ error: 'role must be one of worker, manager, admin, viewer' }, 400)
+  }
   const [row] = await d.insert(schema.teamMembers).values({
     userId: body.userId,
     projectId: body.projectId,
@@ -266,6 +305,33 @@ app.post('/api/v1/team-members', async (c) => {
     billableRate: body.billableRate,
   }).returning()
   return c.json(row, 201)
+})
+
+app.patch('/api/v1/team-members/:id', async (c) => {
+  const d = db(c)
+  const body = await c.req.json()
+  if (body.role !== undefined && !isValidTeamRole(body.role)) {
+    return c.json({ error: 'role must be one of worker, manager, admin, viewer' }, 400)
+  }
+  const patch: Record<string, unknown> = {}
+  if (body.role !== undefined) patch.role = body.role
+  if (body.billableRate !== undefined) patch.billableRate = body.billableRate
+  if (body.projectId !== undefined) patch.projectId = body.projectId
+  const [row] = await d.update(schema.teamMembers)
+    .set({ ...patch, updatedAt: new Date() })
+    .where(eq(schema.teamMembers.id, c.req.param('id')))
+    .returning()
+  if (!row) return c.json({ error: 'Team member assignment not found' }, 404)
+  return c.json(row)
+})
+
+app.delete('/api/v1/team-members/:id', async (c) => {
+  const d = db(c)
+  const id = c.req.param('id')
+  const existing = await d.query.teamMembers.findFirst({ where: eq(schema.teamMembers.id, id) })
+  if (!existing) return c.json({ error: 'Team member assignment not found' }, 404)
+  await d.delete(schema.teamMembers).where(eq(schema.teamMembers.id, id))
+  return c.json({ ok: true })
 })
 
 // ─── Tags ───────────────────────────────────────────────────────────────────
