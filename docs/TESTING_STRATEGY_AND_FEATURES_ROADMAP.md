@@ -117,10 +117,10 @@ Sets up the gates so every later task is automatically verifiable and self-shipp
 - **Unit:** `checksum` known-vector. **Type check:** `tsc --noEmit`. **Integration:** route happy path + validation 400.
 - **Commit:** `test(backend): add vitest + in-memory D1 test harness` — **done 2026-08-05** (delivered as `test(backend): add vitest + in-memory D1 test harness`)
 
-#### Task 0.3 — Type check gates 🟪
+#### Task 0.3 — Type check gates 🟪 ✅
 - Add `typecheck` scripts to both packages. Ensure CI-style `tsc` runs clean on current code (fix any drift).
 - **Unit:** N/A. **Type check:** both packages clean. **Integration:** N/A.
-- **Commit:** `chore: add typecheck gates to frontend and backend`
+- **Commit:** `chore: add typecheck gates to frontend and backend` — **done 2026-08-05**
 
 #### Task 0.4 — Auto commit & push automation 🟪
 - Add root `scripts/deliver.mjs` implementing the gate-then-commit-then-push flow from §1.5.

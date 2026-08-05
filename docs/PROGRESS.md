@@ -11,7 +11,7 @@
 |------|--------|
 | 0.1 Frontend test infrastructure (Vitest + Testing Library) | Complete |
 | 0.2 Backend test infrastructure (Vitest + in-memory D1 shim) | Complete |
-| 0.3 Type check gates (frontend + backend) | Pending |
+| 0.3 Type check gates (frontend + backend) | Complete |
 | 0.4 Auto commit & push automation | Pending |
 
 ### 0.1 Frontend Test Infrastructure
@@ -28,6 +28,10 @@
 - `test/projects.integration.test.ts`: integration test for `POST /api/v1/projects` (happy path + validation 400)
 - Refactored `checksum` from `src/index.ts` into `src/lib/crypto.ts` for testability
 - Scripts: `npm run test`, `npm run typecheck`; tsconfig adds `allowImportingTsExtensions`, `types: [node]`
+
+### 0.3 Type Check Gates
+- Added `typecheck` script to both packages: frontend `tsc -b --noEmit`, backend `tsc --noEmit`
+- Both packages pass clean with zero errors; oxlint clean of errors (pre-existing fast-refresh warnings only)
 
 ---
 
