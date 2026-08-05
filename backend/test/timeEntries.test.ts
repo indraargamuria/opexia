@@ -4,6 +4,7 @@ import {
   isFinalized,
   isWithinEditWindow,
   buildEntryFilters,
+  reviewBlockReason,
   EDIT_POLICY_WINDOW_DAYS,
 } from '../src/lib/timeEntries.ts'
 
@@ -79,5 +80,15 @@ describe('buildEntryFilters', () => {
   it('throws on malformed dates and statuses', () => {
     expect(() => buildEntryFilters({ dateFrom: 'not-a-date' })).toThrow()
     expect(() => buildEntryFilters({ status: 'bogus' })).toThrow()
+  })
+})
+
+describe('reviewBlockReason', () => {
+  it('allows review of pending entries only', () => {
+    expect(reviewBlockReason('pending')).toBeNull()
+    expect(reviewBlockReason('running')).toMatch(/stop the timer/i)
+    expect(reviewBlockReason('approved')).toMatch(/finalized/i)
+    expect(reviewBlockReason('invoiced')).toMatch(/finalized/i)
+    expect(reviewBlockReason('rejected')).toMatch(/resubmitted/i)
   })
 })

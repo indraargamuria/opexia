@@ -188,11 +188,11 @@ Based on the **Dashboard** page and the global **TimeTracker** component.
 
 Based on the PRD approval flow and Dashboard status badges.
 
-#### Task 3.1 — Approve / Reject endpoints 🟪
+#### Task 3.1 — Approve / Reject endpoints 🟪 ✅
 - **Backend:** `POST /time-entries/:id/approve`, `POST /time-entries/:id/reject` (rejection requires `rejectionReason`), batch approval array endpoint, locked-after-approved rule, `invoiced` set externally.
 - **Frontend:** manager approval queue view (batch select → approve/reject), rejection note prompt, locked state on approved rows.
 - **Unit:** approve/reject state machine, reason required, batch semantics. **Type check:** both. **Integration:** worker submits → manager rejects with note → worker edits → resubmits → approves → locked.
-- **Commit:** `feat(approvals): approve/reject workflow + batch queue`
+- **Commit:** `feat(approvals): approve/reject workflow + batch queue` — **done 2026-08-05**
 
 #### Task 3.2 — RBAC middleware 🟪
 - **Backend:** auth-aware middleware resolving the caller's role per project (worker/manager/admin/viewer) from `team_members` + global admin; route guards for reports/audit/export.

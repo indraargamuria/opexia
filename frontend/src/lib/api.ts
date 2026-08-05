@@ -71,6 +71,12 @@ export const api = {
       request<unknown>('/api/v1/time-entries', { method: 'POST', body: JSON.stringify(data) }),
     update: (id: string, data: Record<string, unknown>) =>
       request<unknown>(`/api/v1/time-entries/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    approve: (id: string, actorId: string) =>
+      request<unknown>(`/api/v1/time-entries/${id}/approve`, { method: 'POST', body: JSON.stringify({ actorId }) }),
+    reject: (id: string, actorId: string, rejectionReason: string) =>
+      request<unknown>(`/api/v1/time-entries/${id}/reject`, { method: 'POST', body: JSON.stringify({ actorId, rejectionReason }) }),
+    approveBatch: (actorId: string, ids: string[]) =>
+      request<{ approved: unknown[]; skipped: { id: string; reason: string }[] }>('/api/v1/time-entries/approve-batch', { method: 'POST', body: JSON.stringify({ actorId, ids }) }),
   },
   timer: {
     start: (data: { userId: string; projectId: string; description?: string }) =>

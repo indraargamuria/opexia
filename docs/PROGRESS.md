@@ -81,7 +81,6 @@
 | 2.1 Time entries CRUD & filtering | Complete |
 | 2.2 Timer hardening | Complete |
 | 2.3 Dashboard aggregation | Complete |
-| 2.4 Team reports & insights | Pending |
 
 ### 2.1 Time Entries CRUD & Filtering
 - **Backend:** `src/lib/timeEntries.ts` — `isTimeEntryStatus`/`isFinalized` enum helpers, `EDIT_POLICY_WINDOW_DAYS = 7`, `isWithinEditWindow` (worker self-edit policy), `buildEntryFilters` (validated `dateFrom`/`dateTo` mapped to start/end of day, `projectId`, `status`, `userId`)
@@ -101,6 +100,19 @@
 - **Tests:** `test/reports.test.ts` (unit: Monday-start windowing, 7-day invariant, utilization formula/cap, hours rounding), `test/reports.integration.test.ts` (5: requires userId 400, empty zeros, current-week-only + rejected exclusion, distinct project count, 100% cap)
 
 ---
+
+## Phase 3 — Approval Workflow & RBAC
+
+| Task | Status |
+|------|--------|
+| 3.1 Approve / reject endpoints | Complete |
+| 3.2 RBAC middleware | Pending |
+| 3.3 Route guards & conditional UI | Pending |
+
+### 3.1 Approve / Reject Endpoints
+- **Backend:** `src/lib/timeEntries.ts` — `reviewBlockReason` (pending only; running → "stop the timer", approved/invoiced → finalized, rejected → must resubmit); `POST /api/v1/time-entries/:id/approve` (records `approvedBy`/`approvedAt`, recomputes checksum), `POST /api/v1/time-entries/:id/reject` (requires non-empty `rejectionReason`, records reviewer), `POST /api/v1/time-entries/approve-batch` (approves all pending ids, returns `{ approved, skipped }` with per-id reasons; 400 empty/actor missing, 404 unknown id); PATCH now exempts `rejected` entries from the edit-window check and resubmits them to `pending`, clearing `rejectionReason`
+- **Frontend:** new `/approvals` route (sidebar "Approvals") — status filter (pending/approved/rejected/all), checkbox batch select with Approve/Reject Selected toolbar, per-row Approve/Reject, reject-reason modal (required), lock icon + "Locked" label on approved/invoiced rows, rejection note shown inline on rejected rows; `useApproveTimeEntry`/`useRejectTimeEntry`/`useApproveTimeEntries` hooks invalidate entries + reports
+- **Tests:** `reviewBlockReason` unit case; `test/approvals.integration.test.ts` (10: actorId/reason required, reject requires reason + records reviewer, approve transitions + approver + checksum change, 409 on running/approved/rejected review, 404 unknown, rejected-edit resubmits + clears reason, full workflow submit→reject→edit→resubmit→approve→locked, batch input validation + unknown 404, batch approves 2 / skips finalized with reason)
 
 ## Completed Features
 

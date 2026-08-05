@@ -2,14 +2,14 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { logger } from 'hono/logger'
 import { drizzle } from 'drizzle-orm/d1'
-import { desc, eq, and, sql, asc, gte, lte, ne, lt } from 'drizzle-orm'
+import { desc, eq, and, sql, asc, gte, lte, ne, lt, inArray } from 'drizzle-orm'
 import * as schema from './db/schema'
 import { checksum } from './lib/crypto'
 import { isValidClientCode, isUniqueViolation } from './lib/validators'
 import { canTransition, isValidDateRange, budgetUtilization, creatableProjectStatuses } from './lib/projects'
 import { isValidTeamRole } from './lib/teamMembers'
 import { isValidHexColor } from './lib/tags'
-import { buildEntryFilters, isFinalized, isWithinEditWindow } from './lib/timeEntries'
+import { buildEntryFilters, isFinalized, isWithinEditWindow, reviewBlockReason } from './lib/timeEntries'
 import { isOverdue, isUnderMinDuration, maxDurationMinutes } from './lib/timer'
 import { weekBounds, utilizationPercent, roundedHours } from './lib/reports'
 
@@ -514,7 +514,7 @@ app.patch('/api/v1/time-entries/:id', async (c) => {
   if (isFinalized(existing.status)) {
     return c.json({ error: 'Finalized entries (approved/invoiced) are immutable and cannot be edited' }, 409)
   }
-  if (!isWithinEditWindow(existing)) {
+  if (existing.status !== 'rejected' && !isWithinEditWindow(existing)) {
     return c.json({ error: 'Entry is outside the editable policy window and requires manager approval' }, 409)
   }
   if (body.projectId !== undefined && await projectIsArchived(d, body.projectId)) {
@@ -526,6 +526,10 @@ app.patch('/api/v1/time-entries/:id', async (c) => {
   if (body.startedAt !== undefined) patch.startedAt = new Date(body.startedAt)
   if (body.endedAt !== undefined) patch.endedAt = new Date(body.endedAt)
   if (body.durationMinutes !== undefined) patch.durationMinutes = body.durationMinutes
+  if (existing.status === 'rejected') {
+    patch.status = 'pending'
+    patch.rejectionReason = null
+  }
   const updatedAt = new Date()
   const cs = await checksum(`${id}${updatedAt.getTime()}`)
   const [row] = await d.update(schema.timeEntries)
@@ -536,6 +540,99 @@ app.patch('/api/v1/time-entries/:id', async (c) => {
     await replaceEntryTags(d, id, body.tagIds)
   }
   return c.json(row)
+})
+
+// ─── Approval workflow ──────────────────────────────────────────────────────
+
+app.post('/api/v1/time-entries/:id/approve', async (c) => {
+  const d = db(c)
+  const id = c.req.param('id')
+  const body = await c.req.json().catch(() => ({}))
+  if (!body.actorId) return c.json({ error: 'actorId is required' }, 400)
+  const existing = await d.query.timeEntries.findFirst({ where: eq(schema.timeEntries.id, id) })
+  if (!existing) return c.json({ error: 'Time entry not found' }, 404)
+  const blocked = reviewBlockReason(existing.status)
+  if (blocked) return c.json({ error: blocked }, 409)
+  const now = new Date()
+  const cs = await checksum(`${id}${now.getTime()}`)
+  const [row] = await d.update(schema.timeEntries)
+    .set({
+      status: 'approved',
+      approvedBy: body.actorId,
+      approvedAt: now,
+      rejectionReason: null,
+      checksum: cs,
+      updatedAt: now,
+    })
+    .where(eq(schema.timeEntries.id, id))
+    .returning()
+  return c.json(row)
+})
+
+app.post('/api/v1/time-entries/:id/reject', async (c) => {
+  const d = db(c)
+  const id = c.req.param('id')
+  const body = await c.req.json().catch(() => ({}))
+  if (!body.actorId) return c.json({ error: 'actorId is required' }, 400)
+  if (!body.rejectionReason || !String(body.rejectionReason).trim()) {
+    return c.json({ error: 'rejectionReason is required' }, 400)
+  }
+  const existing = await d.query.timeEntries.findFirst({ where: eq(schema.timeEntries.id, id) })
+  if (!existing) return c.json({ error: 'Time entry not found' }, 404)
+  const blocked = reviewBlockReason(existing.status)
+  if (blocked) return c.json({ error: blocked }, 409)
+  const now = new Date()
+  const cs = await checksum(`${id}${now.getTime()}`)
+  const [row] = await d.update(schema.timeEntries)
+    .set({
+      status: 'rejected',
+      rejectionReason: String(body.rejectionReason).trim(),
+      approvedBy: body.actorId,
+      approvedAt: now,
+      checksum: cs,
+      updatedAt: now,
+    })
+    .where(eq(schema.timeEntries.id, id))
+    .returning()
+  return c.json(row)
+})
+
+app.post('/api/v1/time-entries/approve-batch', async (c) => {
+  const d = db(c)
+  const body = await c.req.json().catch(() => ({}))
+  if (!body.actorId) return c.json({ error: 'actorId is required' }, 400)
+  if (!Array.isArray(body.ids) || body.ids.length === 0) {
+    return c.json({ error: 'ids must be a non-empty array' }, 400)
+  }
+  const ids = body.ids.map((id: unknown) => String(id))
+  const rows = await d.query.timeEntries.findMany({ where: inArray(schema.timeEntries.id, ids) })
+  if (rows.length !== ids.length) {
+    return c.json({ error: 'One or more time entries were not found' }, 404)
+  }
+  const approved: unknown[] = []
+  const skipped: { id: string; reason: string }[] = []
+  for (const entry of rows) {
+    const blocked = reviewBlockReason(entry.status)
+    if (blocked) {
+      skipped.push({ id: entry.id, reason: blocked })
+      continue
+    }
+    const now = new Date()
+    const cs = await checksum(`${entry.id}${now.getTime()}`)
+    const [row] = await d.update(schema.timeEntries)
+      .set({
+        status: 'approved',
+        approvedBy: body.actorId,
+        approvedAt: now,
+        rejectionReason: null,
+        checksum: cs,
+        updatedAt: now,
+      })
+      .where(eq(schema.timeEntries.id, entry.id))
+      .returning()
+    approved.push(row)
+  }
+  return c.json({ approved, skipped })
 })
 
 // ─── Reports ────────────────────────────────────────────────────────────────

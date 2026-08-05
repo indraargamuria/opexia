@@ -15,6 +15,17 @@ export function isFinalized(status: unknown): boolean {
   return typeof status === 'string' && (FINALIZED_STATUSES as readonly string[]).includes(status)
 }
 
+export function isPending(status: unknown): boolean {
+  return status === 'pending'
+}
+
+export function reviewBlockReason(status: unknown): string | null {
+  if (status === 'running') return 'Stop the timer before reviewing this entry'
+  if (status === 'approved' || status === 'invoiced') return 'Finalized entries (approved/invoiced) cannot be reviewed'
+  if (status === 'rejected') return 'Rejected entries must be edited and resubmitted before review'
+  return null
+}
+
 export function isWithinEditWindow(entry: { createdAt?: Date | null }, now: Date = new Date(), windowDays: number = EDIT_POLICY_WINDOW_DAYS): boolean {
   if (!entry.createdAt) return true
   const age = now.getTime() - new Date(entry.createdAt).getTime()

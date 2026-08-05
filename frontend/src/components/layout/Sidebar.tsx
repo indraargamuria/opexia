@@ -5,6 +5,7 @@ import {
   Users,
   BarChart3,
   Tags,
+  ClipboardCheck,
   Settings,
 } from 'lucide-react'
 
@@ -12,6 +13,7 @@ const navItems = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/projects', label: 'Projects', icon: FolderKanban },
   { to: '/team', label: 'Team', icon: Users },
+  { to: '/approvals', label: 'Approvals', icon: ClipboardCheck },
   { to: '/reports', label: 'Reports', icon: BarChart3 },
   { to: '/tags', label: 'Tags', icon: Tags },
 ]
