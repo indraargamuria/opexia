@@ -140,11 +140,11 @@ Based on the **Projects**, **Team**, and **Tags** pages. Completes the CRUD surf
 - **Unit:** code-format validator, unique-violation mapping, soft-delete guard. **Type check:** both. **Integration:** create → project references client → soft-delete blocked with projects.
 - **Commit:** `feat(clients): full CRUD + projects page integration` — **done 2026-08-05**
 
-#### Task 1.2 — Projects module completion 🟪
+#### Task 1.2 — Projects module completion 🟪 ✅
 - **Backend:** add `GET /:id`, `PATCH /:id`, `DELETE` (soft/restrict), status transition validation (`planning→active→completed→archived`, no new entries on `archived`), `end_date ≥ start_date`, budget warnings at 75/90/100%.
 - **Frontend:** wire Projects page create/edit/delete to API; status change control; budget progress bars driven by real `budgetHours` vs logged hours.
 - **Unit:** status-machine transitions, budget-threshold calculator, date validation. **Type check:** both. **Integration:** create → transition to archived → timer start against archived project returns 400.
-- **Commit:** `feat(projects): status transitions, budget warnings, edit/delete`
+- **Commit:** `feat(projects): status transitions, budget warnings, edit/delete` — **done 2026-08-05**
 
 #### Task 1.3 — Team Members module completion 🟪
 - **Backend:** add `GET /:id`, `PATCH /:id` (role/rate change), `DELETE` (restrict, preserving historical time entries). Enforce manager/admin-only approval assignment later (Phase 3).

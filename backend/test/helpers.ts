@@ -71,3 +71,17 @@ export async function seedProject(env: TestEnv, clientId: string, overrides: Par
   }).returning()
   return row
 }
+
+export async function seedTimeEntry(env: TestEnv, projectId: string, overrides: Partial<typeof schema.timeEntries.$inferInsert> = {}) {
+  const [row] = await db(env).insert(schema.timeEntries).values({
+    userId: overrides.userId ?? (await seedUser(env)).id,
+    projectId,
+    description: overrides.description ?? 'Seeded entry',
+    startedAt: overrides.startedAt ?? new Date(),
+    status: overrides.status ?? 'pending',
+    entryMethod: overrides.entryMethod ?? 'timer',
+    checksum: overrides.checksum ?? 'test-checksum',
+    ...overrides,
+  }).returning()
+  return row
+}

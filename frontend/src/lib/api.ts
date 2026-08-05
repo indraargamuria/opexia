@@ -26,6 +26,10 @@ export const api = {
     list: () => request<unknown[]>('/api/v1/projects'),
     create: (data: Record<string, unknown>) =>
       request<unknown>('/api/v1/projects', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: string, data: Record<string, unknown>) =>
+      request<unknown>(`/api/v1/projects/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    remove: (id: string) =>
+      request<unknown>(`/api/v1/projects/${id}`, { method: 'DELETE' }),
   },
   teamMembers: {
     list: () => request<unknown[]>('/api/v1/team-members'),

@@ -1,7 +1,8 @@
 import { useState, type FormEvent } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
-import { useProjects, useCreateProject, useClients, useCreateClient, useUpdateClient, useDeleteClient } from '@/hooks'
+import { useProjects, useCreateProject, useUpdateProject, useDeleteProject, useClients, useCreateClient, useUpdateClient, useDeleteClient } from '@/hooks'
 import { isValidClientCode } from '@/lib/validation'
+import { budgetPercentage, budgetLevel } from '@/lib/budget'
 
 export const Route = createFileRoute('/projects')({
   component: Projects,
@@ -30,8 +31,9 @@ function ProjectStatusBadge({ status }: { status: string }) {
 }
 
 function BudgetBar({ logged, budget }: { logged: number; budget: number }) {
-  const pct = budget > 0 ? Math.min((logged / budget) * 100, 100) : 0
-  const barColor = pct >= 100 ? 'bg-error' : pct >= 90 ? 'bg-warning' : 'bg-brand'
+  const pct = budgetPercentage(logged, budget)
+  const level = budgetLevel(pct)
+  const barColor = level === 'critical' ? 'bg-error' : level === 'warning' ? 'bg-warning' : 'bg-brand'
   return (
     <div className="flex items-center gap-2">
       <div className="flex-1 h-1.5 bg-muted-bg rounded-full overflow-hidden">
@@ -49,7 +51,15 @@ function formatDate(dateStr: string | null) {
 
 function Projects() {
   const { data: projects = [], isLoading, error, refetch } = useProjects()
+  const deleteProject = useDeleteProject()
   const [showNewProject, setShowNewProject] = useState(false)
+  const [editingProject, setEditingProject] = useState<any | null>(null)
+
+  const handleDelete = (project: any) => {
+    if (window.confirm(`Delete project "${project.name}"?`)) {
+      deleteProject.mutate(project.id)
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -64,7 +74,7 @@ function Projects() {
       </div>
 
       {isLoading ? (
-        <TableSkeleton rows={6} cols={6} />
+        <TableSkeleton rows={6} cols={7} />
       ) : error ? (
         <ErrorState message="Failed to load projects" onRetry={() => refetch()} />
       ) : projects.length === 0 ? (
@@ -80,6 +90,7 @@ function Projects() {
                 <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-muted">Status</th>
                 <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-muted">Budget</th>
                 <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-muted">Duration</th>
+                <th className="px-3 py-2.5 text-right text-xs font-semibold uppercase tracking-wide text-muted">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -90,10 +101,26 @@ function Projects() {
                   <td className="px-3 py-1.5 font-mono text-xs text-muted">{project.code ?? '—'}</td>
                   <td className="px-3 py-1.5"><ProjectStatusBadge status={project.status} /></td>
                   <td className="px-3 py-1.5 min-w-[180px]">
-                    <BudgetBar logged={0} budget={project.budgetHours ?? 0} />
+                    <BudgetBar logged={project.loggedHours ?? 0} budget={project.budgetHours ?? 0} />
                   </td>
                   <td className="px-3 py-1.5 text-muted whitespace-nowrap text-xs">
                     {formatDate(project.startDate)} — {formatDate(project.endDate)}
+                  </td>
+                  <td className="px-3 py-1.5">
+                    <div className="flex items-center justify-end gap-2">
+                      <button
+                        onClick={() => setEditingProject(project)}
+                        className="inline-flex items-center justify-center h-8 px-3 rounded-md border border-border text-xs font-medium text-dark-text hover:bg-highlight transition-colors duration-75"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => handleDelete(project)}
+                        className="inline-flex items-center justify-center h-8 px-3 rounded-md bg-error text-white hover:bg-red-700 text-xs font-medium transition-colors duration-75"
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -104,33 +131,41 @@ function Projects() {
 
       <ClientsSection />
 
-      {showNewProject && <NewProjectModal onClose={() => setShowNewProject(false)} />}
+      {showNewProject && <ProjectFormModal onClose={() => setShowNewProject(false)} />}
+      {editingProject && <ProjectFormModal project={editingProject} onClose={() => setEditingProject(null)} />}
     </div>
   )
 }
 
-function NewProjectModal({ onClose }: { onClose: () => void }) {
+function ProjectFormModal({ project, onClose }: { project?: any; onClose: () => void }) {
   const { data: clients = [] } = useClients()
   const createProject = useCreateProject()
-  const [clientId, setClientId] = useState('')
-  const [name, setName] = useState('')
-  const [code, setCode] = useState('')
-  const [status, setStatus] = useState('planning')
-  const [budgetHours, setBudgetHours] = useState('')
+  const updateProject = useUpdateProject()
+  const isEditing = Boolean(project)
+  const [clientId, setClientId] = useState(project?.clientId ?? '')
+  const [name, setName] = useState(project?.name ?? '')
+  const [code, setCode] = useState(project?.code ?? '')
+  const [status, setStatus] = useState(project?.status ?? 'planning')
+  const [budgetHours, setBudgetHours] = useState(project?.budgetHours != null ? String(project.budgetHours) : '')
+  const [error, setError] = useState<string | null>(null)
+  const mutation = isEditing ? updateProject : createProject
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault()
     if (!clientId || !name || !code) return
-    createProject.mutate(
-      {
-        clientId,
-        name,
-        code,
-        status,
-        budgetHours: budgetHours ? Number(budgetHours) : undefined,
-      },
-      { onSuccess: () => onClose() },
-    )
+    const payload = {
+      clientId,
+      name,
+      code,
+      status,
+      budgetHours: budgetHours ? Number(budgetHours) : undefined,
+    }
+    const onSuccess = () => onClose()
+    if (isEditing) {
+      updateProject.mutate({ id: project.id, data: payload }, { onSuccess, onError: (err: any) => setError(err.message ?? 'Failed to update project') })
+    } else {
+      createProject.mutate(payload, { onSuccess, onError: (err: any) => setError(err.message ?? 'Failed to create project') })
+    }
   }
 
   return (
@@ -140,7 +175,7 @@ function NewProjectModal({ onClose }: { onClose: () => void }) {
         onClick={(e) => e.stopPropagation()}
         className="rounded-lg border border-border bg-white p-6 w-full max-w-lg space-y-4"
       >
-        <h2 className="text-lg font-semibold text-dark-text">New Project</h2>
+        <h2 className="text-lg font-semibold text-dark-text">{isEditing ? 'Edit Project' : 'New Project'}</h2>
         <div className="space-y-4">
           <div>
             <label className="text-sm font-medium text-dark-text">Client</label>
@@ -174,16 +209,17 @@ function NewProjectModal({ onClose }: { onClose: () => void }) {
             </div>
           </div>
         </div>
+        {error && <p className="text-xs text-error">{error}</p>}
         <div className="flex items-center justify-end gap-3 pt-2">
           <button type="button" onClick={onClose} className="border border-border bg-white text-dark-text hover:bg-highlight px-4 py-2 rounded-md text-sm font-medium transition-colors duration-75">
             Cancel
           </button>
           <button
             type="submit"
-            disabled={!clientId || !name || !code || createProject.isPending}
+            disabled={!clientId || !name || !code || mutation.isPending}
             className="bg-brand text-white hover:bg-brand-hover active:bg-brand-active disabled:opacity-50 px-4 py-2 rounded-md text-sm font-medium transition-colors duration-75"
           >
-            {createProject.isPending ? 'Creating...' : 'Create Project'}
+            {mutation.isPending ? (isEditing ? 'Saving...' : 'Creating...') : (isEditing ? 'Save Changes' : 'Create Project')}
           </button>
         </div>
       </form>

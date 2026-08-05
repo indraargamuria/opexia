@@ -46,7 +46,7 @@
 | Task | Status |
 |------|--------|
 | 1.1 Clients module (backend CRUD + frontend) | Complete |
-| 1.2 Projects module completion (PATCH/DELETE/status/budget) | Pending |
+| 1.2 Projects module completion (PATCH/DELETE/status/budget) | Complete |
 | 1.3 Team Members module completion (PATCH/DELETE) | Pending |
 | 1.4 Tags module completion (PATCH/DELETE) | Pending |
 
@@ -55,6 +55,13 @@
 - Validators: `isValidClientCode` (alphanumeric + hyphens), `isUniqueViolation` (walks error cause chain for DrizzleQueryError)
 - **Frontend:** `lib/validation.ts`, `api.clients.*`, `useClients/useCreateClient/useUpdateClient/useDeleteClient` hooks; Projects page now has a working "New Project" modal with client picker and a Clients management section (add form + active toggle + delete)
 - **Tests:** `test/clients.integration.test.ts` (10), `test/validators.test.ts` (4), `validation.test.ts` (2)
+
+### 1.2 Projects Module Completion
+- **Backend:** `src/lib/projects.ts` — `canTransition` status state machine (planning→active/on_hold; active→on_hold/completed; on_hold→active/completed; completed→archived; archived terminal), `isValidDateRange`, `budgetUtilization` (normal <75, attention 75–90, warning 90–100, critical ≥100)
+- **Backend routes:** GET `/api/v1/projects` now computes `loggedHours` (sum of `timeEntries.durationMinutes`) and `budgetUtilization`; GET by id (404); POST validates creatable status + date range + duplicate code-per-client (409); PATCH `/api/v1/projects/:id` with transition validation + 404; DELETE blocked 409 while time entries or team members reference the project, else hard delete
+- **Archived guard:** `POST /api/v1/time-entries` and `POST /api/v1/timer/start` reject archived projects (400)
+- **Frontend:** `lib/budget.ts` (`budgetPercentage`, `budgetLevel`), `api.projects.update/remove`, `useUpdateProject`/`useDeleteProject` hooks; Projects table shows real logged hours in budget bars; per-row Edit/Delete actions; shared `ProjectFormModal` handles both create and edit with inline error display
+- **Tests:** `test/projects.test.ts` (unit: transitions, date range, budget), `test/projects-crud.integration.test.ts` (13: get by id, budget aggregation, duplicate 409, status transitions, delete 409/200, archived guards), `budget.test.ts` (frontend)
 
 ---
 

@@ -6,6 +6,7 @@ import { desc, eq, and, sql } from 'drizzle-orm'
 import * as schema from './db/schema'
 import { checksum } from './lib/crypto'
 import { isValidClientCode, isUniqueViolation } from './lib/validators'
+import { canTransition, isValidDateRange, budgetUtilization, creatableProjectStatuses } from './lib/projects'
 
 const app = new Hono<{ Bindings: { opexai_db: any } }>()
 
@@ -19,6 +20,14 @@ app.use('*', cors({
 
 function db(c: any) {
   return drizzle(c.env.opexai_db, { schema })
+}
+
+async function projectIsArchived(d: any, projectId: string): Promise<boolean> {
+  const project = await d.query.projects.findFirst({
+    columns: { status: true },
+    where: eq(schema.projects.id, projectId),
+  })
+  return project?.status === 'archived'
 }
 
 // ─── Clients ────────────────────────────────────────────────────────────────
@@ -121,7 +130,31 @@ app.get('/api/v1/projects', async (c) => {
     with: { client: true },
     orderBy: [desc(schema.projects.createdAt)],
   })
-  return c.json(rows)
+  const hours = await d.select({
+    projectId: schema.timeEntries.projectId,
+    total: sql<number>`sum(${schema.timeEntries.durationMinutes})`,
+  })
+    .from(schema.timeEntries)
+    .groupBy(schema.timeEntries.projectId)
+  const hoursByProject = new Map(hours.map((h) => [h.projectId, Number(h.total) ?? 0]))
+  return c.json(rows.map((row) => {
+    const loggedHours = Math.round(((hoursByProject.get(row.id) ?? 0) / 60) * 100) / 100
+    return {
+      ...row,
+      loggedHours,
+      budgetUtilization: budgetUtilization(loggedHours, row.budgetHours),
+    }
+  }))
+})
+
+app.get('/api/v1/projects/:id', async (c) => {
+  const d = db(c)
+  const row = await d.query.projects.findFirst({
+    where: eq(schema.projects.id, c.req.param('id')),
+    with: { client: true },
+  })
+  if (!row) return c.json({ error: 'Project not found' }, 404)
+  return c.json(row)
 })
 
 app.post('/api/v1/projects', async (c) => {
@@ -129,6 +162,21 @@ app.post('/api/v1/projects', async (c) => {
   const body = await c.req.json()
   if (!body.name || !body.code || !body.clientId) {
     return c.json({ error: 'name, code, and clientId are required' }, 400)
+  }
+  const duplicate = await d.query.projects.findFirst({
+    where: and(
+      eq(schema.projects.clientId, body.clientId),
+      eq(schema.projects.code, body.code),
+    ),
+  })
+  if (duplicate) {
+    return c.json({ error: 'A project with this code already exists for the client' }, 409)
+  }
+  if (body.status !== undefined && !creatableProjectStatuses.includes(body.status)) {
+    return c.json({ error: `Cannot create a project in status ${body.status}` }, 400)
+  }
+  if (!isValidDateRange(body.startDate, body.endDate)) {
+    return c.json({ error: 'endDate must be on or after startDate' }, 400)
   }
   const [row] = await d.insert(schema.projects).values({
     clientId: body.clientId,
@@ -142,6 +190,56 @@ app.post('/api/v1/projects', async (c) => {
     endDate: body.endDate,
   }).returning()
   return c.json(row, 201)
+})
+
+app.patch('/api/v1/projects/:id', async (c) => {
+  const d = db(c)
+  const id = c.req.param('id')
+  const body = await c.req.json()
+  const existing = await d.query.projects.findFirst({ where: eq(schema.projects.id, id) })
+  if (!existing) return c.json({ error: 'Project not found' }, 404)
+  if (body.status !== undefined && body.status !== existing.status) {
+    if (!canTransition(existing.status, body.status)) {
+      return c.json({ error: `Cannot transition project from ${existing.status} to ${body.status}` }, 400)
+    }
+  }
+  const startDate = body.startDate ?? existing.startDate
+  const endDate = body.endDate ?? existing.endDate
+  if (!isValidDateRange(startDate, endDate)) {
+    return c.json({ error: 'endDate must be on or after startDate' }, 400)
+  }
+  const patch: Record<string, unknown> = {}
+  if (body.name !== undefined) patch.name = body.name
+  if (body.code !== undefined) patch.code = body.code
+  if (body.description !== undefined) patch.description = body.description
+  if (body.status !== undefined) patch.status = body.status
+  if (body.budgetHours !== undefined) patch.budgetHours = body.budgetHours
+  if (body.budgetCost !== undefined) patch.budgetCost = body.budgetCost
+  if (body.startDate !== undefined) patch.startDate = body.startDate
+  if (body.endDate !== undefined) patch.endDate = body.endDate
+  const [row] = await d.update(schema.projects)
+    .set({ ...patch, updatedAt: new Date() })
+    .where(eq(schema.projects.id, id))
+    .returning()
+  return c.json(row)
+})
+
+app.delete('/api/v1/projects/:id', async (c) => {
+  const d = db(c)
+  const id = c.req.param('id')
+  const project = await d.query.projects.findFirst({ where: eq(schema.projects.id, id) })
+  if (!project) return c.json({ error: 'Project not found' }, 404)
+  const [entryCount] = await d.select({ count: sql<number>`count(*)` })
+    .from(schema.timeEntries)
+    .where(eq(schema.timeEntries.projectId, id))
+  const [memberCount] = await d.select({ count: sql<number>`count(*)` })
+    .from(schema.teamMembers)
+    .where(eq(schema.teamMembers.projectId, id))
+  if (Number(entryCount.count) > 0 || Number(memberCount.count) > 0) {
+    return c.json({ error: 'Project has associated time entries or team members and cannot be deleted' }, 409)
+  }
+  await d.delete(schema.projects).where(eq(schema.projects.id, id))
+  return c.json({ ok: true })
 })
 
 // ─── Team Members ───────────────────────────────────────────────────────────
@@ -215,6 +313,9 @@ app.post('/api/v1/time-entries', async (c) => {
   if (!body.userId || !body.projectId) {
     return c.json({ error: 'userId and projectId are required' }, 400)
   }
+  if (await projectIsArchived(d, body.projectId)) {
+    return c.json({ error: 'Project is archived and cannot accept time entries' }, 400)
+  }
   const cs = await checksum(`${body.userId}${body.projectId}${Date.now()}`)
   const [row] = await d.insert(schema.timeEntries).values({
     userId: body.userId,
@@ -242,6 +343,9 @@ app.post('/api/v1/timer/start', async (c) => {
   const body = await c.req.json()
   if (!body.userId || !body.projectId) {
     return c.json({ error: 'userId and projectId are required' }, 400)
+  }
+  if (await projectIsArchived(d, body.projectId)) {
+    return c.json({ error: 'Project is archived and cannot accept time entries' }, 400)
   }
   const existing = await d.query.timeEntries.findFirst({
     where: and(

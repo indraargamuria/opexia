@@ -1,5 +1,5 @@
 export { useClients, useCreateClient, useUpdateClient, useDeleteClient } from './useClients'
-export { useProjects, useCreateProject } from './useProjects'
+export { useProjects, useCreateProject, useUpdateProject, useDeleteProject } from './useProjects'
 export { useTeamMembers, useAssignTeamMember } from './useTeamMembers'
 export { useTags, useCreateTag } from './useTags'
 export { useTimeEntries, useCreateTimeEntry } from './useTimeEntries'
