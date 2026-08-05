@@ -81,8 +81,25 @@ export function csvEscape(value: string): string {
   return value
 }
 
+function csvLine(row: (string | number)[]): string {
+  return row.map((cell) => csvEscape(String(cell))).join(',')
+}
+
 export function buildExportCsv(rows: (string | number)[][]): string {
-  const lines = [[...EXPORT_HEADERS] as string[], ...rows]
-    .map((row) => row.map((cell) => csvEscape(String(cell))).join(','))
+  const lines = [[...EXPORT_HEADERS] as string[], ...rows].map(csvLine)
   return `\uFEFF${lines.join('\r\n')}\r\n`
+}
+
+export function createCsvStream(rows: (string | number)[][]): ReadableStream<Uint8Array> {
+  const encoder = new TextEncoder()
+  const lines = [[...EXPORT_HEADERS] as string[], ...rows].map(csvLine)
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(encoder.encode('\uFEFF'))
+      for (const line of lines) {
+        controller.enqueue(encoder.encode(`${line}\r\n`))
+      }
+      controller.close()
+    },
+  })
 }

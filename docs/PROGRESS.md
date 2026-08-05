@@ -135,7 +135,7 @@
 | 4.1 Reports backend (project/client/team aggregation) | Complete |
 | 4.2 Reports frontend wiring | Complete |
 | 4.3 Excel export | Complete |
-| 4.4 CSV export | Pending |
+| 4.4 CSV export | Complete |
 
 ### 4.1 Reports Backend Aggregation
 - **lib/reports.ts:** `reportWindow` (90-day default rolling window, validated `dateFrom`/`dateTo`, exclusive end → RangeError on inverted range), `parseDateParam`, `toISODate`, `weeksInWindow`, `roundMoney`, `costForMinutes`, `aggregateEntries` (per-user rates with client-rate fallback), `budgetReport` (utilization + variance), `teamUtilizationPercent` (target = 40h × workers × weeks, capped 100)
@@ -162,6 +162,13 @@
 - **Deps:** `xlsx@0.18.5` (imported as `import * as XLSX` — esbuild resolves `xlsx.mjs` which has no default export); Worker bundle dry-run 875 KiB
 - **Tests:** `exportRows.test.ts` (9: headers, row mapping incl. missing desc/tags, status labels, CSV escaping, BOM/CRLF, workbook parse round-trip); `reports-export.integration.test.ts` (4: valid xlsx with sheet name + columns + row values, client-rate fallback, worker 403, bad format/inverted range 400); frontend `reports.integration.test.tsx` export-click test
 - **Live smoke:** worker returned 200 with real row (Jane Doe / Acme Corp / Q4 Financial Audit, 0.07h @ 185 = $12.33); CSV branch 200 `text/csv`; worker role 403
+
+### 4.4 CSV Export
+- **lib/exportRows.ts:** `createCsvStream` — true streaming `ReadableStream<Uint8Array>` (BOM first, then one CRLF-terminated line per row), `buildExportCsv`/`csvEscape` refactored to share the same `csvLine` builder (RFC 4180 quoting: quoted cells with `""` escapes, BOM, CRLF)
+- **Endpoint** `format=csv` branch returns `text/csv; charset=utf-8` + attachment disposition via the stream
+- **Tests:** `exportRows.test.ts` createCsvStream round-trip (bytes equal `buildExportCsv`); `reports-export.integration.test.ts` streams a CSV that parses back exactly to the seeded entries via a test-local RFC 4180 parser (embedded quote+comma description round-trips), BOM present in raw bytes
+- **Frontend:** Export CSV button already wired in 4.3 (`downloadReport('csv', params)`)
+- **Live smoke:** streaming CSV 200 with BOM in raw bytes
 
 ## Completed Features
 

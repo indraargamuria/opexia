@@ -6,6 +6,7 @@ import {
   exportStatusLabel,
   csvEscape,
   buildExportCsv,
+  createCsvStream,
   writeXlsxBuffer,
 } from '../src/lib/exportRows.ts'
 
@@ -115,6 +116,33 @@ describe('buildExportCsv', () => {
     expect(csv.startsWith('\uFEFF')).toBe(true)
     expect(csv).toContain('\r\n')
     expect(csv.replace('\uFEFF', '').split('\r\n')[0]).toBe(EXPORT_HEADERS.join(','))
+  })
+})
+
+describe('createCsvStream', () => {
+  it('streams the same bytes as buildExportCsv', async () => {
+    const rows = [
+      toExportRow({
+        date: new Date(2026, 6, 15, 9),
+        worker: 'Bob',
+        client: 'Acme Corp',
+        project: 'Alpha',
+        description: 'say "hi", done',
+        tags: ['A', 'B'],
+        durationMinutes: 90,
+        rate: 100,
+        amount: 150,
+        status: 'approved',
+      }),
+    ]
+    const reader = createCsvStream(rows).getReader()
+    let text = ''
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) break
+      text += new TextDecoder('utf-8', { fatal: false, ignoreBOM: true }).decode(value)
+    }
+    expect(text).toBe(buildExportCsv(rows))
   })
 })
 

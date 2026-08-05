@@ -12,7 +12,7 @@ import { isValidHexColor } from './lib/tags'
 import { buildEntryFilters, isFinalized, isWithinEditWindow, reviewBlockReason } from './lib/timeEntries'
 import { isOverdue, isUnderMinDuration, maxDurationMinutes } from './lib/timer'
 import { weekBounds, utilizationPercent, roundedHours, reportWindow, weeksInWindow, aggregateEntries, costForMinutes, roundMoney, budgetReport, teamUtilizationPercent, WEEKLY_TARGET_HOURS } from './lib/reports'
-import { toExportRow, writeXlsxBuffer, buildExportCsv } from './lib/exportRows'
+import { toExportRow, writeXlsxBuffer, createCsvStream } from './lib/exportRows'
 import { userRoles, isUserRole, canApprove, canViewAuditLogs, canViewTeamReports, isGlobalAdmin } from './lib/rbac'
 import type { UserRole } from './lib/rbac'
 
@@ -1063,8 +1063,7 @@ app.get('/api/v1/reports/export', requireRole(...TEAM_REPORTS_ROLES), async (c) 
 
   const filename = `opexia-time-entries-${period.dateFrom}_${period.dateTo}.${format}`
   if (format === 'csv') {
-    const csv = buildExportCsv(rows)
-    return new Response(csv, {
+    return new Response(createCsvStream(rows), {
       headers: {
         'Content-Type': 'text/csv; charset=utf-8',
         'Content-Disposition': `attachment; filename="${filename}"`,

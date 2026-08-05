@@ -9,6 +9,45 @@ function asUser(id: string) {
   return { 'X-User-Id': id }
 }
 
+function parseCsv(text: string): string[][] {
+  const rows: string[][] = []
+  let row: string[] = []
+  let field = ''
+  let inQuotes = false
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]
+    if (inQuotes) {
+      if (ch === '"') {
+        if (text[i + 1] === '"') {
+          field += '"'
+          i++
+        } else {
+          inQuotes = false
+        }
+      } else {
+        field += ch
+      }
+    } else if (ch === '"') {
+      inQuotes = true
+    } else if (ch === ',') {
+      row.push(field)
+      field = ''
+    } else if (ch === '\n') {
+      row.push(field)
+      rows.push(row)
+      row = []
+      field = ''
+    } else if (ch !== '\r') {
+      field += ch
+    }
+  }
+  if (field.length > 0 || row.length > 0) {
+    row.push(field)
+    rows.push(row)
+  }
+  return rows
+}
+
 const JULY_WINDOW = 'dateFrom=2026-07-01&dateTo=2026-07-31'
 
 async function seedExportFixture(env: TestEnv) {
@@ -98,6 +137,59 @@ describe('reports export endpoint', () => {
     const row = rows.find((r) => r[3] === 'Alpha' && r[6] === 1)
     expect(row?.[7]).toBe(client.billingRate)
     expect(row?.[8]).toBe(150)
+  })
+
+  it('streams a CSV that parses back to the seeded entries', async () => {
+    const { project, bob } = await seedExportFixture(env)
+    const csvEntry = await seedTimeEntry(env, project.id, {
+      userId: bob.id,
+      durationMinutes: 75,
+      startedAt: new Date(2026, 6, 18, 9),
+      status: 'approved',
+      description: 'Fix "quoted", edge case',
+    })
+    expect(csvEntry).toBeTruthy()
+
+    const res = await makeRequest(
+      `/api/v1/reports/export?format=csv&${JULY_WINDOW}`,
+      { headers: asUser(admin.id) },
+      env,
+    )
+    expect(res.status).toBe(200)
+    expect(res.headers.get('content-type')).toContain('text/csv')
+    const raw = new TextDecoder('utf-8', { fatal: false, ignoreBOM: true }).decode(new Uint8Array(await res.arrayBuffer()))
+    expect(raw.startsWith('\uFEFF')).toBe(true)
+    const text = raw.replace(/^\uFEFF/, '')
+
+    const rows = parseCsv(text)
+    expect(rows[0]).toEqual([...EXPORT_HEADERS])
+    expect(rows).toHaveLength(3)
+
+    const quoteRow = rows.find((r) => r[4].includes('quoted'))
+    expect(quoteRow).toEqual([
+      '2026-07-18',
+      'Bob',
+      'Acme Corp',
+      'Alpha',
+      'Fix "quoted", edge case',
+      '',
+      '1.25',
+      '100',
+      '125',
+      'Approved',
+    ])
+    expect(rows[1]).toEqual([
+      '2026-07-15',
+      'Bob',
+      'Acme Corp',
+      'Alpha',
+      'Fix auth flow',
+      'Development',
+      '1.5',
+      '100',
+      '150',
+      'Approved',
+    ])
   })
 
   it('blocks non-manager roles with 403', async () => {

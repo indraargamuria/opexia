@@ -227,11 +227,11 @@ Based on the **Reports** page.
 - **Unit:** workbook row mapper (headers, amounts, status mapping). **Type check:** both. **Integration:** export returns valid xlsx buffer with expected sheet name/columns.
 - **Commit:** `feat(export): excel export with ERP-ready schema` — **done 2026-08-05**
 
-#### Task 4.4 — CSV export 🟪
+#### Task 4.4 — CSV export 🟪 ✅
 - **Backend:** streaming CSV export with same schema; RFC 4180 quoting.
 - **Frontend:** wire "Export CSV" button.
 - **Unit:** escaping/quoting edge cases. **Type check:** both. **Integration:** CSV parse back equals seeded entries.
-- **Commit:** `feat(export): streaming csv export`
+- **Commit:** `feat(export): streaming csv export` — **done 2026-08-05**
 
 ---
 
