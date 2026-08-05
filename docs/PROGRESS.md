@@ -133,7 +133,7 @@
 | Task | Status |
 |------|--------|
 | 4.1 Reports backend (project/client/team aggregation) | Complete |
-| 4.2 Reports frontend wiring | Pending |
+| 4.2 Reports frontend wiring | Complete |
 | 4.3 Excel export | Pending |
 | 4.4 CSV export | Pending |
 
@@ -145,6 +145,14 @@
   - `GET /api/v1/reports/team` — per-member `minutes/hours/count/projectCount/utilizationPercent` sorted by hours desc, `teamTotals` (minutes/hours/activeWorkerCount/averageUtilizationPercent)
 - **Indexes:** migration `0003_add_report_indexes.sql` — `(project_id, started_at)` and `(user_id, status, started_at)` composites for ≤90-day window queries
 - **Tests:** `reports.test.ts` extended (windowing, date parsing, weeks, money/cost math, aggregation with fallback + zero-skip, budget report, team utilization); `test/reports-rollup.integration.test.ts` (10: project rollup incl. per-tag cost, status/window exclusions, 404/400, RBAC worker/viewer 403 + manager 200, client rollup + byProject + 404, team utilization order/totals, rejected/running exclusion, empty window)
+
+### 4.2 Reports Frontend Wiring
+- **lib/period.ts** (+ 8 unit tests): `PeriodKey` (`week`/`month`/`quarter`/`custom`), `periodRange` → ISO `dateFrom`/`dateTo` (quarter = calendar quarter), `toISODate`, `utilizationLevel` (normal <90 / warning 90–99 / critical ≥100), `utilizationBarClass`, `utilizationTextClass`
+- **lib/api.ts:** report types `PeriodParams`, `BudgetView`, `TagRollup`, `ProjectReport`, `ClientReport`, `TeamReport`; `reports.project/client/team` methods with window params; `buildQueryString` loosened to `Record<string, unknown>` so interfaces pass TS
+- **hooks/useReports.ts:** `useClientReport`, `useTeamReport`, `useReportsOverview` (clients → per-client reports + team report, aggregated byProject + totals)
+- **routes/reports.tsx:** live KPI cards (Total Hours / Cost / Clients / Avg Utilization), Project Summary table (hours, utilization bar + %, cost) per client, Team Utilization table with color thresholds, period selector drives API filters, Export buttons still disabled (4.3/4.4)
+- **Tests:** `reports.integration.test.tsx` (2: renders real aggregation data from API; custom range selection drives API filters via `dateFrom`/`dateTo`)
+- Note: default system window is a 90-day rolling window, so out-of-window entries are excluded
 
 ## Completed Features
 

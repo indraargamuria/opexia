@@ -4,5 +4,5 @@ export { useTeamMembers, useAssignTeamMember, useUpdateTeamMember, useRemoveTeam
 export { useTags, useCreateTag, useUpdateTag, useDeleteTag } from './useTags'
 export { useTimeEntries, useCreateTimeEntry, useUpdateTimeEntry } from './useTimeEntries'
 export { useApproveTimeEntry, useRejectTimeEntry, useApproveTimeEntries } from './useApprovals'
-export { useReportsMe } from './useReports'
+export { useReportsMe, useClientReport, useTeamReport, useReportsOverview } from './useReports'
 export { useActiveTimer, useStartTimer, useStopTimer } from './useTimer'

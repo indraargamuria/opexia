@@ -216,10 +216,10 @@ Based on the **Reports** page.
 - **Unit:** aggregation queries, budget-vs-actual math, date windowing. **Type check:** both. **Integration:** seed 3 projects/5 members → assert per-project and per-client rollups.
 - **Commit:** `feat(reports): project/client/team aggregation endpoints` — **done 2026-08-05**
 
-#### Task 4.2 — Reports frontend wiring 🟪
+#### Task 4.2 — Reports frontend wiring 🟪 ✅
 - **Frontend:** replace Reports mock tables with real aggregation data; period selector (week/month/quarter/custom) drives API filters; utilization color thresholds (brand < 90 / warning / error).
 - **Unit:** period-to-range mapper, threshold color function. **Type check:** both. **Integration:** select custom range → rendered table matches API payload.
-- **Commit:** `feat(reports): live reports page + period filters`
+- **Commit:** `feat(reports): live reports page + period filters` — **done 2026-08-05**
 
 #### Task 4.3 — Excel export 🟪
 - **Backend:** `GET /api/v1/reports/export?format=xlsx` (SheetJS) — schema from PRD §3.3.2 (`Date | Worker | Client | Project | Task Description | Tags | Duration (h) | Rate | Amount | Status`).

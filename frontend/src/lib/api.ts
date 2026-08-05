@@ -29,6 +29,77 @@ export interface WeeklyReport {
   activeProjects: number
 }
 
+export type PeriodParams = {
+  dateFrom?: string
+  dateTo?: string
+}
+
+export interface BudgetView {
+  budgetHours: number | null
+  budgetCost: number | null
+  loggedHours: number
+  utilization: { percentage: number; level: string }
+  actualCost: number
+  variance: number | null
+}
+
+export interface TagRollup {
+  tagId: string
+  name: string
+  color: string | null
+  category: string | null
+  minutes: number
+  hours: number
+  count: number
+  cost: number
+}
+
+export interface ProjectReport {
+  projectId: string
+  project: { id: string; name: string; code: string; status: string; client: { id: string; name: string } | null }
+  period: { dateFrom: string; dateTo: string }
+  totals: { minutes: number; hours: number; count: number; cost: number }
+  budget: BudgetView
+  byTag: TagRollup[]
+}
+
+export interface ClientReport {
+  clientId: string
+  client: { id: string; name: string; code: string }
+  period: { dateFrom: string; dateTo: string }
+  totals: { minutes: number; hours: number; count: number; cost: number }
+  projectCount: number
+  workerCount: number
+  weeks: number
+  utilizationPercent: number
+  byProject: {
+    projectId: string
+    name: string
+    status: string
+    minutes: number
+    hours: number
+    cost: number
+    budgetUtilization: { percentage: number; level: string }
+  }[]
+}
+
+export interface TeamReport {
+  period: { dateFrom: string; dateTo: string }
+  weeks: number
+  members: {
+    userId: string
+    name: string
+    email: string | null
+    role: string
+    minutes: number
+    hours: number
+    count: number
+    projectCount: number
+    utilizationPercent: number
+  }[]
+  teamTotals: { minutes: number; hours: number; activeWorkerCount: number; averageUtilizationPercent: number }
+}
+
 export const api = {
   clients: {
     list: () => request<unknown[]>('/api/v1/clients'),
@@ -94,5 +165,11 @@ export const api = {
   reports: {
     me: (userId: string) =>
       request<WeeklyReport>(`/api/v1/reports/me?userId=${encodeURIComponent(userId)}`),
+    project: (id: string, params?: PeriodParams) =>
+      request<ProjectReport>(`/api/v1/reports/project/${id}${buildQueryString(params ?? {})}`),
+    client: (id: string, params?: PeriodParams) =>
+      request<ClientReport>(`/api/v1/reports/client/${id}${buildQueryString(params ?? {})}`),
+    team: (params?: PeriodParams) =>
+      request<TeamReport>(`/api/v1/reports/team${buildQueryString(params ?? {})}`),
   },
 }
