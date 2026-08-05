@@ -1,33 +1,33 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { runGates, parseArgs, deliver } from './deliver.mjs'
+import { runGates, parseArgs, deliver, commandString } from './deliver.mjs'
+
+const GATES = [
+  { dir: 'frontend', cmd: 'npm', args: ['run', 'test'] },
+  { dir: 'frontend', cmd: 'npm', args: ['run', 'typecheck'] },
+  { dir: 'backend', cmd: 'npm', args: ['run', 'test'] },
+  { dir: 'backend', cmd: 'npm', args: ['run', 'typecheck'] },
+]
+
+test('commandString joins cmd and args', () => {
+  assert.equal(commandString({ cmd: 'npm', args: ['run', 'test'] }), 'npm run test')
+})
 
 test('runGates aborts on a failing gate without running later gates', () => {
   const calls = []
-  const exec = (cmd, args) => {
-    calls.push(`${cmd} ${args.join(' ')}`)
-    if (args.includes('typecheck')) throw new Error('boom')
+  const exec = (command) => {
+    calls.push(command)
+    if (command.includes('typecheck')) throw new Error('boom')
   }
-  const gates = [
-    { dir: 'frontend', cmd: 'npm', args: ['run', 'test'] },
-    { dir: 'frontend', cmd: 'npm', args: ['run', 'typecheck'] },
-    { dir: 'backend', cmd: 'npm', args: ['run', 'test'] },
-  ]
-  assert.throws(() => runGates(exec, gates, 'root'), /Gate failed: frontend npm run typecheck/)
+  assert.throws(() => runGates(exec, GATES, 'root'), /Gate failed: npm run typecheck/)
   assert.deepEqual(calls, ['npm run test', 'npm run typecheck'])
 })
 
 test('runGates runs every gate when all succeed', () => {
   const calls = []
-  const exec = (cmd, args) => calls.push(`${cmd} ${args.join(' ')}`)
-  const gates = [
-    { dir: 'frontend', cmd: 'npm', args: ['run', 'test'] },
-    { dir: 'frontend', cmd: 'npm', args: ['run', 'typecheck'] },
-    { dir: 'backend', cmd: 'npm', args: ['run', 'test'] },
-    { dir: 'backend', cmd: 'npm', args: ['run', 'typecheck'] },
-  ]
-  runGates(exec, gates, 'root')
-  assert.equal(calls.length, 4)
+  const exec = (command) => calls.push(command)
+  runGates(exec, GATES, 'root')
+  assert.deepEqual(calls, ['npm run test', 'npm run typecheck', 'npm run test', 'npm run typecheck'])
 })
 
 test('parseArgs reads --message flag', () => {
@@ -44,21 +44,15 @@ test('parseArgs returns null message when absent', () => {
 
 test('deliver commits and pushes when gates are green', () => {
   const calls = []
-  const exec = (cmd, args) => calls.push(`${cmd} ${args.join(' ')}`)
-  const gates = [
-    { dir: 'frontend', cmd: 'npm', args: ['run', 'test'] },
-    { dir: 'frontend', cmd: 'npm', args: ['run', 'typecheck'] },
-    { dir: 'backend', cmd: 'npm', args: ['run', 'test'] },
-    { dir: 'backend', cmd: 'npm', args: ['run', 'typecheck'] },
-  ]
-  deliver(exec, { message: 'feat(x): y' }, 'root', gates)
+  const exec = (command) => calls.push(command)
+  deliver(exec, { message: 'feat(x): y' }, 'root', GATES)
   assert.deepEqual(calls, [
     'npm run test',
     'npm run typecheck',
     'npm run test',
     'npm run typecheck',
     'git add -A',
-    'git commit -m feat(x): y',
+    'git commit -m "feat(x): y"',
     'git push',
   ])
 })
